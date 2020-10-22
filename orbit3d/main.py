@@ -89,6 +89,7 @@ def set_initial_parameters(start_file, ntemps, nplanets, nwalkers,
 
     return par0
 
+
 def initialize_data(config, companion_gaia):
     # load in items from the ConfigParser object
     HipID = config.getint('data_paths', 'HipID', fallback=0)
