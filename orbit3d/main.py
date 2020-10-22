@@ -299,9 +299,10 @@ def run():
         line = line[:-1]
         try:
             if '=' in line and not line.startswith('#'):
-                hdu.header.append((line.split('=')[0], line.split('=')[1]), end=True)
+                # max of 58 characters allowed from across the header keyword and values (from trial and error)
+                hdu.header[line.split('=')[0][:8]] = line.split('=')[1][-50:]
             elif not line.startswith('#'):
-                hdu.header.append(('comment', line[:80]), end=True)
+                hdu.header.append(('comment', '',  line[-50:]), end=True)
         except:
             continue
 
