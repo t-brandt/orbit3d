@@ -186,11 +186,11 @@ cdef class Data:
                 self.ast_planetID = (reldat[:, 6]).astype(np.int32)
                 assert np.all(self.ast_planetID == reldat[:, 6])
                 if verbose:
-                    print("Loading astrometric data for %d planets" % (np.amax(self.ast_planetID) + 1))
+                    print("Loading relative astrometric data for %d planets" % (np.amax(self.ast_planetID) + 1))
             except:
                 self.ast_planetID = (reldat[:, 0]*0).astype(np.int32)
                 if verbose:
-                    print("Loading astrometric data for 1 planet")
+                    print("Loading relative astrometric data for 1 planet")
             if verbose:
                 print("Loaded %d relative astrometric data points from file " % (self.nAst) + relAstfile)
         except:
@@ -200,15 +200,16 @@ cdef class Data:
             relep = []
 
         try:
+            print(hgca_filepath)
             t = fits.open(hgca_filepath)[1].data
             t = t[np.where(t['hip_id'] == Hip)]
             assert len(t) > 0
             if verbose:
-                print("Loading absolute astrometry data for Hip %d" % (Hip))
+                print("Loaded HGCA data for Hip %d" % (Hip))
             self.use_abs_ast = 1
         except:
             if verbose:
-                print("Unable to load absolute astrometry data for Hip %d" % (Hip))
+                print("Unable to load HGCA astrometry data for Hip %d" % (Hip))
             self.use_abs_ast = 0
             self.epochs = np.asarray(list(rvep) + list(relep) + list(rel_RV_ep))
             self.nTot = len(self.epochs)

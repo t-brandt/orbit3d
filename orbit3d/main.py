@@ -9,7 +9,7 @@ import numpy as np
 import os
 import time
 import emcee
-from ptemcee import Sampler as PTSampler
+#from ptemcee import Sampler as PTSampler
 from configparser import ConfigParser
 from astropy.io import fits
 from htof.main import Astrometry
@@ -244,13 +244,13 @@ def run():
         'data': data, 'nplanets': nplanets, 'H1f': H1f, 'H2f': H2f, 'Gf': Gf, 'priors': priors}
     _loglkwargs = loglkwargs
     # run sampler without feeding it loglkwargs directly, since loglkwargs contains non-picklable C objects.
-    try:
-        sample0 = emcee.PTSampler(ntemps, nwalkers, ndim, avoid_pickle_lnprob, return_one, threads=nthreads)
-    except:
-        sample0 = PTSampler(ntemps=ntemps, nwalkers=nwalkers, dim=ndim,
-                            logl=avoid_pickle_lnprob, logp=return_one,
-                            threads=nthreads)
-    
+    #### Syntax for the new PTSampler
+    #sample0 = PTSampler(ntemps=ntemps, nwalkers=nwalkers, dim=ndim,
+    #                    logl=avoid_pickle_lnprob, logp=return_one, threads=nthreads)
+    #### Syntax for the old emcee = 2.2.1 PTSampler
+    sample0 = emcee.PTSampler(ntemps, nwalkers, ndim, avoid_pickle_lnprob, return_one, threads=nthreads)
+    ####
+
     print("Running MCMC ... ")
     #sample0.run_mcmc(par0, nstep, **samplekwargs)
     #add a progress bar
@@ -274,7 +274,9 @@ def run():
     print('Total Time: %.0f seconds' % (time.time() - start_time))
     print("Mean acceptance fraction (cold chain): {0:.6f}".format(np.mean(sample0.acceptance_fraction[0, :])))
     # save data
-    shape = sample0.lnprobability[0].shape
+    #shape = sample0.logprobability[0].shape  # syntax for the new sampler
+    shape = sample0.lnprobability[0].shape  # syntax for the old sampler
+
     parfit = np.zeros((shape[0], shape[1], 8 + data.nInst))
 
     loglkwargs['returninfo'] = True
@@ -305,6 +307,7 @@ def run():
 
     out = fits.HDUList(hdu)
     out.append(fits.PrimaryHDU(sample0.lnprobability[0].astype(np.float32)))
+    #out.append(fits.PrimaryHDU(sample0.logprobability[0].astype(np.float32)))  # syntax for the new Sampler
     out.append(fits.PrimaryHDU(parfit.astype(np.float32)))
     for i in range(1000):
         filename = os.path.join(args.output_dir, 'HIP%d_chain%03d.fits' % (HipID, i))
