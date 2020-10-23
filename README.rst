@@ -57,8 +57,8 @@ The value of x (row along the last axis) to access each parameter are as follows
 - 7 : longitude of the ascending node in radians
 - 8 : Mean longitude at the reference time, commonly called \lambda in radians. By default,
 the reference epoch is 2455197.5000 JD.
-- 9 : mass of the third object (i.e. planet) if nplanets > 1.
-- 10: semi-major axis of the third planet in A.U.
+- 9 : mass of the third object (i.e. second companion planet) if nplanets > 1.
+- 10: semi-major axis of the second companion in A.U.
 - and so forth, repeating parameters 2-8 (7 in total) but for each planet fit in order.
 
 For instance HDU[10, :, 1] gives the primary mass
@@ -66,7 +66,7 @@ of walker 10 for every step. HDU[10, 40, 1] would be the primary mass described 
 HDU[10, :, 2] is the secondary mass at every step for walker 10.
 
 HDU1: Log likelyhood. 2d-array of shape (nwalkers,  nsteps/50) which is the log likelyhood for each set
-of parameters. E.g. HDU1[10, 40] will be the log likelyhood for the paremeters given
+of parameters. E.g. HDU1[10, 40] will be the log likelyhood for the parameters given
 by HDU0[10, 40, :]. Note that this likelyhood includes matrix determinants; it isn't just chisq.
 
 HDU2: ?? containing the following 8 best-fit values (in the following order) along the 3rd axis:
