@@ -97,6 +97,7 @@ cdef class Data:
     cdef double [:] PA_err
     cdef double [:] relsep_pa_corr
     cdef int [:] ast_planetID
+    cdef int [:] rel_RV_planetID
     cdef public int n_rel_RV, nRV, nAst, nHip1, nHip2, nGaia, nTot, nInst, companion_ID
     cdef public double pmra_H, pmdec_H, pmra_HG, pmdec_HG, pmra_G, pmdec_G
     cdef public double pmra_G_B, pmdec_G_B
@@ -115,12 +116,17 @@ cdef class Data:
                  refep=2455197.5000, companion_gaia=None, verbose=True):
 
         if relRVfile is not None:
-            rel_rvdat = np.genfromtxt(relRVfile).reshape(-1, 4)
+            rel_rvdat = np.genfromtxt(relRVfile)
+            if len(rel_rvdat.shape) == 1:
+                rel_rvdat = np.reshape(rel_rvdat, (1, -1))
             print("Loading relative RV data from file " + relRVfile)
             rel_RV_ep = rel_rvdat[:, 0] # epochs
             self.rel_RV = rel_rvdat[:, 1] # velocities
             self.rel_RV_err = rel_rvdat[:, 2] # errors
             self.n_rel_RV = rel_rvdat.shape[0] # number of points
+            self.rel_RV_planetID = (rel_rvdat[:, 4]).astype(np.int32)
+            if verbose:
+                print("Loading relative RV data for %d planets" % (len(set(self.rel_RV_planetID))))
         else:
             print("No relative RV data.")
             rel_RV_ep = []
@@ -526,6 +532,7 @@ cdef class Model:
         PyMem_Free(self.dRA_G_B)
         PyMem_Free(self.dDec_G_B)
         PyMem_Free(self.RV)
+        PyMem_Free(self.rel_RV)
         PyMem_Free(self.EA)
         PyMem_Free(self.sinEA)
         PyMem_Free(self.cosEA)
@@ -1034,7 +1041,7 @@ def calc_PMs_no_epoch_astrometry(Data data, Model model):
 # runtime.
 #######################################################################
 
-def calc_RV(Data data, Params par, Model model):
+def calc_RV(Data data, Params par, Model model, int iplanet=0):
 
     cdef extern from "math.h" nogil:
         double sin(double _x)
@@ -1085,9 +1092,10 @@ def calc_RV(Data data, Params par, Model model):
     cdef double conv = -1. * (par.msec + par.mpri) / par.msec # conversion factor from RV of the primary to delta RV = RVsecondary - RVprimary.
     for i in range(data.n_rel_RV):
         j = i + i_rel_RV
-        model.rel_RV[i] += _calc_RV(model.sinEA[j], model.cosEA[j], model.EA[j], one_d_24,
-                                    one_d_240, pi, pi_d_2, tanEAd2, sqrt1pe_div_sqrt1me, RVampl * conv,
-                                    cosarg, sinarg, ecccosarg, fabs(model.sinEA[j]), fabs(model.EA[j]))
+        if iplanet == data.rel_RV_planetID[i]:
+            model.rel_RV[i] = _calc_RV(model.sinEA[j], model.cosEA[j], model.EA[j], one_d_24,
+                                       one_d_240, pi, pi_d_2, tanEAd2, sqrt1pe_div_sqrt1me, RVampl * conv,
+                                       cosarg, sinarg, ecccosarg, fabs(model.sinEA[j]), fabs(model.EA[j]))
     # Don't use the following: we do about 20 times better above.
     #for i in range(data.nRV):
     #    TA = 2*atan2(sqrt1pe*sin(model.EA[i]/2), sqrt1me*cos(model.EA[i]/2))
@@ -1210,9 +1218,9 @@ def calcL(Data data, Params par, Model model, bint freemodel=True,
     # Add the log likelyhood of the relative RV data
     ##################################################################
     for i in range(data.n_rel_RV):
-        ivar = 1 / (data.rel_RV_err[i]**2 + jitsq)
+        ivar = 1 / (data.rel_RV_err[i]**2)  # dont include jitter here.
         lnL -= (data.rel_RV[i] - model.rel_RV[i]) ** 2 * ivar
-        lnL += log(ivar)
+        #lnL += log(ivar) # only need this if jitter is included above.
         # factor of 1/2 is done at the very end of calcL .
 
     ##################################################################

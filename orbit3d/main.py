@@ -162,7 +162,7 @@ def lnprob(theta, returninfo=False, RVoffsets=False, use_epoch_astrometry=False,
             return -np.inf
 
         orbit.calc_EA_RPP(data, params, model)
-        orbit.calc_RV(data, params, model)
+        orbit.calc_RV(data, params, model, i)
         orbit.calc_offsets(data, params, model, i)
         
     if use_epoch_astrometry:
