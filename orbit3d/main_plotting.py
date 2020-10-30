@@ -12,26 +12,7 @@ plot_orbit --output-dir ./Plots --config-file ./orbit3d/tests/config_Gl758.ini
 """
 
 from __future__ import print_function
-import numpy as np
-import pandas as pd
-import os
-import time
-#import emcee, corner
-import scipy.optimize as op
-from random import randrange
-from astropy.io import fits
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-import matplotlib.colors as mcolors
-import matplotlib.cm as cm
-import matplotlib.patches as mpatches
-from matplotlib.ticker import NullFormatter
-from matplotlib.ticker import AutoMinorLocator
-from configparser import ConfigParser
-from htof.main import Astrometry
-from orbit3d import orbit
 from orbit3d.config import parse_args_plotting
-import argparse
 from configparser import ConfigParser
 from orbit3d import orbit_plots         # import orbit_plots plotting package
 
@@ -47,7 +28,6 @@ def initialize_plot_options(config):
     OP.target = OP.title = config.get('plotting', 'target')
     OP.Hip = config.getint('data_paths', 'HipID', fallback=0)
     OP.nplanets = config.getint('mcmc_settings', 'nplanets')
-
     # read data
     OP.RVfile = config.get('data_paths', 'RVFile')
     OP.relAstfile = config.get('data_paths', 'AstrometryFile', fallback=None)
@@ -120,8 +100,6 @@ def run():
     """
     Initialize OP and make plots
     """
-    
-    start_time = time.time()
    
     args = parse_args_plotting()
     config = ConfigParser()
@@ -131,8 +109,6 @@ def run():
     OPs = initialize_plot_options(config)
     
     # which plot
-    plot_settings = {}
-    burnin = config.getint('plotting', 'burnin', fallback=0)
     plot_astr = config.getboolean('plotting', 'Astrometry_orbits_plot', fallback=False)
     plot_astr_pred = config.getboolean('plotting', 'Astrometric_prediction_plot', fallback=False)
     plot_rv = config.getboolean('plotting', 'RV_orbits_plot', fallback=False)
@@ -146,6 +122,10 @@ def run():
     
     if checkconv:
         OPs.plot_chains()
+    if plot_rel_sep:
+        OPs.relsep()
+    if plot_position_angle:
+        OPs.PA()
     if plot_astr:
         OPs.astrometry()
     if plot_astr_pred:
@@ -154,10 +134,6 @@ def run():
         OPs.RV()
     if plot_rel_rv:
         OPs.relRV()
-    if plot_rel_sep:
-        OPs.relsep()
-    if plot_position_angle:
-        OPs.PA()
     if plot_proper_motions:
         OPs.proper_motions()
     if plot_corner:

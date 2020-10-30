@@ -128,7 +128,8 @@ cdef class Data:
             if verbose:
                 print("Loading relative RV data for %d planets" % (len(set(self.rel_RV_planetID))))
         else:
-            print("No relative RV data.")
+            if verbose:
+                print("No relative RV data.")
             rel_RV_ep = []
             self.n_rel_RV = 0
 
@@ -206,7 +207,6 @@ cdef class Data:
             relep = []
 
         try:
-            print(hgca_filepath)
             t = fits.open(hgca_filepath)[1].data
             t = t[np.where(t['hip_id'] == Hip)]
             assert len(t) > 0

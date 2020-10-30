@@ -1,12 +1,9 @@
 import os
 import numpy as np
-import julian
-from datetime import datetime as dt
-import time
+from astropy.time import Time
 from random import randrange
 from orbit3d import corner_modified
 from scipy.interpolate import interp1d
-import scipy.optimize as op
 from scipy import stats, signal
 from orbit3d import orbit
 from astropy.io import fits
@@ -17,6 +14,9 @@ import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 from matplotlib.ticker import NullFormatter
 from matplotlib.ticker import AutoMinorLocator
+
+plt.style.use('/home/gmbrandt/Documents/papers/mesa.mplstyle')
+
 
 class Orbit:
 
@@ -77,7 +77,8 @@ class Orbit:
             self.colorpar = self.par.ecc
 
         model.free()
-        
+
+
 class OrbitPlots:
 
 ###################################### Initialize Class ############################################
@@ -136,39 +137,10 @@ class OrbitPlots:
 
 ###################################### Define Functions ############################################
     def JD_to_calendar(self, JD):
-        """
-            Function to convert Julian Date to Calendar Date
-        """
-        mjd = JD - 2400000.5
-        date = julian.from_jd(mjd, fmt='mjd')
-        def sinceEpoch(date): # returns seconds since epoch
-            return time.mktime(date.timetuple())
-        s = sinceEpoch
-        year = date.year
-        startOfThisYear = dt(year=year, month=1, day=1)
-        startOfNextYear = dt(year=year+1, month=1, day=1)
-        yearElapsed = s(date) - s(startOfThisYear)
-        yearDuration = s(startOfNextYear) - s(startOfThisYear)
-        fraction = yearElapsed/yearDuration
-        return date.year + fraction
+        return Time(JD, format='jd').jyear
 
-    def calendar_to_JD(self, year, M=1, D=1):
-        """
-            Function to convert Calendar Date to Julian Date
-        """
-        if M <= 2:
-            y = year - 1
-            m = M + 12
-        else:
-            y = year
-            m = M
-        if year <= 1583: # more precisely should be less than or equal to 10/4/1582
-            B = -2
-        else:
-            B = int(y/400.) - int(y/100.)
-        UT = 0
-        JD = int(365.25*y) + int(30.6001*(m+1)) + B + 1720996.5  + D + UT/24.
-        return JD
+    def calendar_to_JD(self, year):
+        return Time(year, format='jyear').jd
 
     def define_epochs(self):
         """
@@ -187,7 +159,6 @@ class OrbitPlots:
         """
             Function to load in the MCMC chain from fit_orbit
         """
-        source = self.MCMCfile.split('_')[0]
         chain, lnp, extras = [fits.open(self.MCMCfile)[i].data for i in range(3)]
         chain = chain[:, self.burnin:, :].reshape(-1, chain.shape[-1])
         self.lnp = lnp[:, self.burnin:].flatten()
@@ -485,7 +456,6 @@ class OrbitPlots:
         fig = plt.figure(figsize=(5.7, 6.5))
         ax = fig.add_axes((0.15, 0.3, 0.8, 0.6))
         orb_ml = Orbit(self, 'best')
-                
         # plot the 50 randomly selected curves
         for i in range(self.num_orbits):
             orb = Orbit(self, step=self.rand_idx[i])
@@ -504,13 +474,14 @@ class OrbitPlots:
                 epoch_obs_Inst[j] = self.JD_to_calendar(self.epoch_obs_dic[i][j])
             rv_epoch_list.append(epoch_obs_Inst)
 
-        jit_ml = 10**(0.5*orb_ml.par.jit)
+        # DO NOT PLOT WITH JITTER
+        jit_ml = 0#10**(0.5*orb_ml.par.jit)
         
         for i in range(self.nInst):
             ax.errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], yerr=np.sqrt(self.RV_obs_err_dic[i]**2 + jit_ml**2), fmt=self.color_list[i]+'o', ecolor='black', alpha = 0.8, zorder = 299)
             ax.scatter(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], facecolors='none', edgecolors='k', alpha = 0.8, zorder=300)
             
-        ax.set_xlim(self.start_epoch, self.end_epoch)
+        ax.set_xlim(np.min(rv_epoch_list)-1, np.max(rv_epoch_list)+1)
         x0, x1 = ax.get_xlim()
         y0, y1 = ax.get_ylim()
         ax.set_aspect((x1-x0)/(y1-y0))
@@ -686,7 +657,7 @@ class OrbitPlots:
 
             orb_ml = Orbit(self, step='best')
             # plot the randomly selected curves
-                        
+
             for i in range(self.num_orbits):
                 orb = Orbit(self, step=self.rand_idx[i]) 
                 
@@ -706,29 +677,24 @@ class OrbitPlots:
             ax1.scatter(ep_relAst_obs_calendar, self.relsep_obs, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
 
             dat_OC = self.relsep_obs - orb_ml.relsep[self.ast_indx]
-            
+
             ax2.errorbar(ep_relAst_obs_calendar, dat_OC, yerr=self.relsep_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
             ax2.scatter(ep_relAst_obs_calendar, dat_OC, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
-                
+
             # axes settings
             # ax1
             ax1.get_shared_x_axes().join(ax1, ax2)
-            range_eprA_obs = max(ep_relAst_obs_calendar) - min(ep_relAst_obs_calendar)
-            range_relsep_obs = max(self.relsep_obs)  - min(self.relsep_obs)
-            ax1.set_xlim(min(ep_relAst_obs_calendar) - range_eprA_obs/8., max(ep_relAst_obs_calendar) + range_eprA_obs/8.)
-            ax1.set_ylim(min(self.relsep_obs) - range_relsep_obs/2., max(self.relsep_obs) + range_relsep_obs/2.)
+            ax1.set_xlim((np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1))  # reducing these limits from-1+1 causes matplotlib mesa style to throw an error
+            ax1.set_ylim((np.min(self.relsep_obs)*0.9, np.max(self.relsep_obs)*1.1))
             ax1.xaxis.set_major_formatter(NullFormatter())
             ax1.xaxis.set_minor_locator(AutoMinorLocator())
             ax1.yaxis.set_minor_locator(AutoMinorLocator())
             ax1.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
             ax1.set_ylabel('Separation (arcsec)', labelpad=13, fontsize=13)
             # ax2
-            range_datOC = max(dat_OC) - min(dat_OC)
-            if np.abs(min(dat_OC)) <= np.abs(max(dat_OC)):
-                ax2.set_ylim(-np.abs(max(dat_OC)) - range_datOC, max(dat_OC) + range_datOC)
-            elif np.abs(min(dat_OC)) > np.abs(max(dat_OC)):
-                ax2.set_ylim(min(dat_OC) - range_datOC, np.abs(min(dat_OC)) + range_datOC)
-            ax2.xaxis.set_minor_locator(AutoMinorLocator())
+            ax2.set_xlim((np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1))  # reducing these limits from-1+1 causes matplotlib mesa style to throw an error
+            ylim = (min(np.min(dat_OC), -0.1), max(np.max(dat_OC), 0.1))  # minimum of 0.1 O-C to not throw off the matplotlib mesa plot style
+            ax2.set_ylim(ylim)
             ax2.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
             ax2.set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
             ax2.set_ylabel('O-C', labelpad=-2, fontsize=13)
@@ -737,10 +703,12 @@ class OrbitPlots:
             if self.set_limit:
                 ax2.set_xlim(np.float(self.user_xlim[0]), np.float(self.user_xlim[1]))
                 ax2.set_ylim(np.float(self.user_ylim[0]),np.float(self.user_ylim[1]))
+
             if self.show_title:
                 ax1.set_title('Relative Separation vs. Epoch')
             if self.add_text:
                 ax1.text(self.x_text,self.y_text, self.text_name, fontsize=15)
+
             if self.usecolorbar:
                 cbar_ax = fig.add_axes([1.6, 0.16, 0.05, 0.7])
                 if self.colorbar_size < 0 or self.colorbar_pad < 0:
@@ -779,7 +747,10 @@ class OrbitPlots:
                 
         plt.tight_layout()
         print("Plotting Separation, your plot is generated at " + self.outputdir)
-        plt.savefig(os.path.join(self.outputdir, 'relsep_OC_' + self.title)+'.pdf', transparent=True, bbox_inches='tight', dpi=200)
+        try:
+            plt.savefig(os.path.join(self.outputdir, 'relsep_OC_' + self.title)+'.pdf')
+        except:
+            print('saving Separation failed.')
 ################################################################################################
 
 
@@ -825,21 +796,17 @@ class OrbitPlots:
             # axes settings
             # ax1
             ax1.get_shared_x_axes().join(ax1, ax2)
-            range_eprA_obs = max(ep_relAst_obs_calendar) - min(ep_relAst_obs_calendar)
-            range_PA_obs = max(self.PA_obs)  - min(self.PA_obs)
-            ax1.set_xlim(min(ep_relAst_obs_calendar) - range_eprA_obs/8., max(ep_relAst_obs_calendar) + range_eprA_obs/8.)
-            ax1.set_ylim(min(self.PA_obs) - range_PA_obs/5., max(self.PA_obs) + range_PA_obs/5.)
+            ax1.set_xlim((np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1))  # reducing these limits from-1+1 causes matplotlib mesa style to throw an error
+            ax1.set_ylim((np.min(self.relsep_obs)*0.9, np.max(self.relsep_obs)*1.1))
             ax1.xaxis.set_major_formatter(NullFormatter())
             ax1.xaxis.set_minor_locator(AutoMinorLocator())
             ax1.yaxis.set_minor_locator(AutoMinorLocator())
             ax1.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
             ax1.set_ylabel(r'Position Angle ($^{\circ}$)', labelpad=5, fontsize=13)
             # ax2
-            range_datOC = max(dat_OC) - min(dat_OC)
-            if np.abs(min(dat_OC)) <= np.abs(max(dat_OC)):
-                ax2.set_ylim(-np.abs(max(dat_OC)) - range_datOC, max(dat_OC) + range_datOC)
-            elif np.abs(min(dat_OC)) > np.abs(max(dat_OC)):
-                ax2.set_ylim(min(dat_OC) - range_datOC, np.abs(min(dat_OC)) + range_datOC)
+            ax2.set_xlim((np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1))  # reducing these limits from-1+1 causes matplotlib mesa style to throw an error
+            ylim = (min(np.min(dat_OC), -0.1), max(np.max(dat_OC), 0.1))  # minimum of 0.1 O-C to not throw off the matplotlib mesa plot style
+            ax2.set_ylim(ylim)
             ax2.xaxis.set_minor_locator(AutoMinorLocator())
             ax2.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
             ax2.set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
@@ -890,7 +857,10 @@ class OrbitPlots:
         
         plt.tight_layout()
         print("Plotting Position Angle, your plot is generated at " + self.outputdir)
-        plt.savefig(os.path.join(self.outputdir,'PA_OC_' + self.title)+'.pdf',bbox_inches='tight', dpi=200, transparent=True)
+        try:
+            plt.savefig(os.path.join(self.outputdir,'PA_OC_' + self.title)+'.pdf',bbox_inches='tight', dpi=200, transparent=True)
+        except:
+            print('saving Position Angle failed.')
 ################################################################################################
 
 
@@ -990,12 +960,12 @@ class OrbitPlots:
             ax1.get_shared_x_axes().join(ax1, ax2)
             ax2.set_xlim([t1_RA - dt_RA/8., t2_RA + dt_RA/8.])
 
-            ax1.set_ylabel(r'$\Delta \mu_{\alpha}$ (mas/yr)', labelpad = 5, fontsize = 13)
+            ax1.set_ylabel(r'$\mu_{\alpha}$ (mas/yr)', labelpad = 5, fontsize = 13)
             # ax3
             ax3.get_shared_x_axes().join(ax3, ax4)
             ax4.set_xlim([t1_Dec - dt_Dec/8., t2_Dec + dt_Dec/8.])
             range_mudec_obs = max(self.mudec_obs)  - min(self.mudec_obs)
-            ax3.set_ylabel(r'$\Delta \mu_{\delta}$ (mas/yr)', labelpad = 6, fontsize = 13)
+            ax3.set_ylabel(r'$\mu_{\delta}$ (mas/yr)', labelpad = 6, fontsize = 13)
             for ax in [ax1, ax3]:
                 ax.xaxis.set_major_formatter(NullFormatter())
                 ax.xaxis.set_minor_locator(AutoMinorLocator())
@@ -1253,7 +1223,6 @@ class OrbitPlots:
 
         tt, lnp, extras = [fits.open(self.MCMCfile)[i].data for i in range(3)]
         tt = tt[:, self.burnin:, :]
-        nwalkers = tt.shape[0]
         chain = tt
         ndim = chain.shape[2]
         nwalkers = chain.shape[0]
@@ -1332,11 +1301,10 @@ class OrbitPlots:
         
             chain = self.chain
             extras = self.extras
-            ndim = chain[:, 0].flatten().shape[0]
             di = 7*self.iplanet
             
             #save posterior and derived parameters
-            RV_Jitter = print_par_values(chain[:,0+di],perc_sigmas)
+            RV_Jitter = print_par_values(10**(chain[:,0+di]/2),perc_sigmas)
             Mpri = print_par_values(chain[:,1+di],perc_sigmas)
             if self.cmref == 'msec_solar':
                 Msec = print_par_values(chain[:,2+di],perc_sigmas)
