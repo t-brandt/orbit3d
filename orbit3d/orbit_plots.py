@@ -474,17 +474,27 @@ class OrbitPlots:
                 epoch_obs_Inst[j] = self.JD_to_calendar(self.epoch_obs_dic[i][j])
             rv_epoch_list.append(epoch_obs_Inst)
 
-        # DO NOT PLOT WITH JITTER
-        jit_ml = 0#10**(0.5*orb_ml.par.jit)
-        
+        jit_ml = 10**(0.5*orb_ml.par.jit)
+
+        chisq = 0
         for i in range(self.nInst):
-            ax.errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], yerr=np.sqrt(self.RV_obs_err_dic[i]**2 + jit_ml**2), fmt=self.color_list[i]+'o', ecolor='black', alpha = 0.8, zorder = 299)
+            # DO NOT PLOT WITH JITTER
+            ax.errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], yerr=np.sqrt(self.RV_obs_err_dic[i]**2 + 0), fmt=self.color_list[i]+'o', ecolor='black', alpha = 0.8, zorder = 299)
             ax.scatter(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], facecolors='none', edgecolors='k', alpha = 0.8, zorder=300)
             
         ax.set_xlim(np.min(rv_epoch_list)-1, np.max(rv_epoch_list)+1)
         x0, x1 = ax.get_xlim()
         y0, y1 = ax.get_ylim()
         ax.set_aspect((x1-x0)/(y1-y0))
+
+        # add the chisquared of the fit
+        model_rv_vs_epoch = interp1d(self.epoch_calendar, orb_ml.RV)
+        chisq = []
+        for i in range(self.nInst):
+            ominusc = self.RV_obs_dic[i] + orb_ml.offset[i] - model_rv_vs_epoch(rv_epoch_list[i])
+            chisq.append(ominusc**2/(self.RV_obs_err_dic[i]**2 + jit_ml**2))
+        chisq = np.sum(chisq)
+        ax.annotate(fr'$\chi^2 = {round(chisq, 2)}$', xy=(0.05, 0.05), xycoords='axes fraction')
         
         if self.set_limit:
             ax.set_xlim(np.float(self.user_xlim[0]), np.float(self.user_xlim[1]))
