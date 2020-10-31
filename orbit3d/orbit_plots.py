@@ -478,7 +478,10 @@ class OrbitPlots:
 
         chisq = 0
         for i in range(self.nInst):
-            # DO NOT PLOT WITH JITTER
+            # faint error bars for jitter
+            ax.errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i],yerr=np.sqrt(self.RV_obs_err_dic[i] ** 2 + jit_ml**2), fmt=self.color_list[i] + 'o', ecolor='red',
+                        alpha=0.5, zorder=298)
+            # solid error bars for absence of jitter
             ax.errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], yerr=np.sqrt(self.RV_obs_err_dic[i]**2 + 0), fmt=self.color_list[i]+'o', ecolor='black', alpha = 0.8, zorder = 299)
             ax.scatter(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], facecolors='none', edgecolors='k', alpha = 0.8, zorder=300)
             
@@ -807,7 +810,7 @@ class OrbitPlots:
             # ax1
             ax1.get_shared_x_axes().join(ax1, ax2)
             ax1.set_xlim((np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1))  # reducing these limits from-1+1 causes matplotlib mesa style to throw an error
-            ax1.set_ylim((np.min(self.relsep_obs)*0.9, np.max(self.relsep_obs)*1.1))
+            ax1.set_ylim((np.min(self.PA_obs)*0.9, np.max(self.PA_obs)*1.1))
             ax1.xaxis.set_major_formatter(NullFormatter())
             ax1.xaxis.set_minor_locator(AutoMinorLocator())
             ax1.yaxis.set_minor_locator(AutoMinorLocator())
