@@ -15,7 +15,7 @@ import matplotlib.cm as cm
 from matplotlib.ticker import NullFormatter
 from matplotlib.ticker import AutoMinorLocator
 
-plt.style.use('/home/gmbrandt/Documents/papers/mesa.mplstyle')
+#plt.style.use('/home/gmbrandt/Documents/papers/mesa.mplstyle')
 
 
 class Orbit:
@@ -465,6 +465,7 @@ class OrbitPlots:
 
         # plot the most likely one
         ax.plot(self.epoch_calendar, orb_ml.RV, color='black')
+        np.savetxt('/home/gmbrandt/Downloads/orb_reference.txt', np.vstack([self.epoch_calendar, orb_ml.RV]))
 
         # plot the observed data points (RV & relAst)
         rv_epoch_list = []
@@ -476,7 +477,6 @@ class OrbitPlots:
 
         jit_ml = 10**(0.5*orb_ml.par.jit)
 
-        chisq = 0
         for i in range(self.nInst):
             # faint error bars for jitter
             ax.errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i],yerr=np.sqrt(self.RV_obs_err_dic[i] ** 2 + jit_ml**2), fmt=self.color_list[i] + 'o', ecolor='red',
@@ -664,9 +664,8 @@ class OrbitPlots:
     def relsep(self):
     
         if self.have_reldat:
-            fig = plt.figure(figsize=(4.7, 5.5))
-            ax1 = fig.add_axes((0.15, 0.3, 0.8, 0.6))
-            ax2 = fig.add_axes((0.15, 0.12, 0.8, 0.16)) # X, Y, width, height
+            fig, axes = plt.subplots(3, 1, figsize=(5, 8), sharex=True, gridspec_kw={'height_ratios': [3, 1, 1]})
+            ax1, ax2, ax3 = axes
 
             orb_ml = Orbit(self, step='best')
             # plot the randomly selected curves
@@ -676,9 +675,11 @@ class OrbitPlots:
                 
                 ax1.plot(self.epoch_calendar, orb.relsep, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
                 ax2.plot(self.epoch_calendar, orb.relsep - orb_ml.relsep, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
+                ax3.plot(self.epoch_calendar, orb.relsep - orb_ml.relsep, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
 
             ax1.plot(self.epoch_calendar, orb_ml.relsep, color='black')
             ax2.plot(self.epoch_calendar, np.zeros(len(self.epoch)), 'k--', dashes=(5, 5))
+            ax3.plot(self.epoch_calendar, np.zeros(len(self.epoch)), 'k--', dashes=(5, 5))
 
             # plot the observed data points
             orb_ml = Orbit(self, step='best', epochs='observed')
@@ -694,23 +695,27 @@ class OrbitPlots:
             ax2.errorbar(ep_relAst_obs_calendar, dat_OC, yerr=self.relsep_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
             ax2.scatter(ep_relAst_obs_calendar, dat_OC, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
 
+            ax3.errorbar(ep_relAst_obs_calendar, dat_OC, yerr=self.relsep_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
+            ax3.scatter(ep_relAst_obs_calendar, dat_OC, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+
             # axes settings
             # ax1
-            ax1.get_shared_x_axes().join(ax1, ax2)
-            ax1.set_xlim((np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1))  # reducing these limits from-1+1 causes matplotlib mesa style to throw an error
+            xlim = (np.min(ep_relAst_obs_calendar)-.1, np.max(ep_relAst_obs_calendar)+.2)
+            ax1.set_xlim(xlim)
             ax1.set_ylim((np.min(self.relsep_obs)*0.9, np.max(self.relsep_obs)*1.1))
-            ax1.xaxis.set_major_formatter(NullFormatter())
-            ax1.xaxis.set_minor_locator(AutoMinorLocator())
-            ax1.yaxis.set_minor_locator(AutoMinorLocator())
             ax1.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
             ax1.set_ylabel('Separation (arcsec)', labelpad=13, fontsize=13)
             # ax2
-            ax2.set_xlim((np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1))  # reducing these limits from-1+1 causes matplotlib mesa style to throw an error
-            ylim = (min(np.min(dat_OC), -0.1), max(np.max(dat_OC), 0.1))  # minimum of 0.1 O-C to not throw off the matplotlib mesa plot style
+            three_sigma = 3 * np.max(self.relsep_obs_err)
+            ylim = np.min(dat_OC) - three_sigma, np.max(dat_OC) + three_sigma
             ax2.set_ylim(ylim)
-            ax2.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
-            ax2.set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
             ax2.set_ylabel('O-C', labelpad=-2, fontsize=13)
+            # ax3
+            ylim = -10 * np.min(self.relsep_obs_err), 10 * np.min(self.relsep_obs_err)
+            ax3.set_ylim(ylim)
+            ax3.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
+            ax3.set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
+            ax3.set_ylabel('O-C', labelpad=-2, fontsize=13)
             
             # from advanced plotting settings in config.ini
             if self.set_limit:
@@ -776,9 +781,8 @@ class OrbitPlots:
     def PA(self):
     
         if self.have_reldat:
-            fig = plt.figure(figsize=(4.7, 5.5))
-            ax1 = fig.add_axes((0.15, 0.3, 0.8, 0.6))
-            ax2 = fig.add_axes((0.15, 0.12, 0.8, 0.16)) # X, Y, width, height
+            fig, axes = plt.subplots(3, 1, figsize=(5, 8), sharex=True, gridspec_kw={'height_ratios': [3, 1, 1]})
+            ax1, ax2, ax3 = axes
 
             orb_ml = Orbit(self, step='best')
 
@@ -788,10 +792,12 @@ class OrbitPlots:
 
                 ax1.plot(self.epoch_calendar, orb.PA, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
                 ax2.plot(self.epoch_calendar, orb.PA - orb_ml.PA, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
+                ax3.plot(self.epoch_calendar, orb.PA - orb_ml.PA, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
 
             # plot the highest likelihood orbit
             ax1.plot(self.epoch_calendar, orb_ml.PA, color='black')
             ax2.plot(self.epoch_calendar, np.zeros(len(self.epoch)), 'k--', dashes=(5, 5))
+            ax3.plot(self.epoch_calendar, np.zeros(len(self.epoch)), 'k--', dashes=(5, 5))
 
             # plot the observed data points
             orb_ml = Orbit(self, 'best', epochs='observed')
@@ -805,25 +811,35 @@ class OrbitPlots:
 
             ax2.errorbar(ep_relAst_obs_calendar, dat_OC, yerr=self.PA_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
             ax2.scatter(ep_relAst_obs_calendar, dat_OC, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+            ax3.errorbar(ep_relAst_obs_calendar, dat_OC, yerr=self.PA_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
+            ax3.scatter(ep_relAst_obs_calendar, dat_OC, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
 
             # axes settings
             # ax1
             ax1.get_shared_x_axes().join(ax1, ax2)
-            ax1.set_xlim((np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1))  # reducing these limits from-1+1 causes matplotlib mesa style to throw an error
+            xlim = (np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1)
+            ax1.set_xlim(xlim)
             ax1.set_ylim((np.min(self.PA_obs)*0.9, np.max(self.PA_obs)*1.1))
-            ax1.xaxis.set_major_formatter(NullFormatter())
-            ax1.xaxis.set_minor_locator(AutoMinorLocator())
-            ax1.yaxis.set_minor_locator(AutoMinorLocator())
+            #ax1.xaxis.set_major_formatter(NullFormatter())
+            #ax1.xaxis.set_minor_locator(AutoMinorLocator())
+            #ax1.yaxis.set_minor_locator(AutoMinorLocator())
             ax1.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
             ax1.set_ylabel(r'Position Angle ($^{\circ}$)', labelpad=5, fontsize=13)
             # ax2
-            ax2.set_xlim((np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1))  # reducing these limits from-1+1 causes matplotlib mesa style to throw an error
-            ylim = (min(np.min(dat_OC), -0.1), max(np.max(dat_OC), 0.1))  # minimum of 0.1 O-C to not throw off the matplotlib mesa plot style
+            #ax2.set_xlim(xlim)
+            three_sigma = 3 * np.max(self.PA_obs_err)
+            ylim = np.min(dat_OC) - three_sigma, np.max(dat_OC) + three_sigma
             ax2.set_ylim(ylim)
             ax2.xaxis.set_minor_locator(AutoMinorLocator())
             ax2.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
-            ax2.set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
-            ax2.set_ylabel('O-C', labelpad=17, fontsize=13)
+            ax2.set_ylabel('O-C', labelpad=-2, fontsize=13)
+            #ax3
+            ylim = -10 * np.min(self.PA_obs_err), 10 * np.min(self.PA_obs_err)
+            ax3.set_ylim(ylim)
+            ax3.xaxis.set_minor_locator(AutoMinorLocator())
+            ax3.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
+            ax3.set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
+            ax3.set_ylabel('O-C', labelpad=17, fontsize=13)
 
             # from advanced plotting settings in config.ini
             if self.set_limit:

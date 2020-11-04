@@ -126,7 +126,7 @@ cdef class Data:
             self.n_rel_RV = rel_rvdat.shape[0] # number of points
             self.rel_RV_planetID = (rel_rvdat[:, 4]).astype(np.int32)
             if verbose:
-                print("Loading relative RV data for %d planets" % (len(set(self.rel_RV_planetID))))
+                print(f"Loaded {self.n_rel_RV } relative RV data points for {len(set(self.rel_RV_planetID))} planets")
         else:
             if verbose:
                 print("No relative RV data.")
@@ -140,7 +140,7 @@ cdef class Data:
             self.RV_err = rvdat[:, 2]
             self.nRV = rvdat.shape[0]
             if verbose:
-                print("Loading RV data from file " + RVfile)
+                print(f"Loaded {self.nRV} RV data points from file " + RVfile)
         except:
             if verbose:
                 print("Unable to load RV data from file " + RVfile)
@@ -814,8 +814,8 @@ def calc_offsets(Data data, Params par, Model model, int iplanet=0):
             model.rel_RA[i] += par.sau/a_1*dRA
             model.rel_Dec[i] += par.sau/a_1*dDec
         elif par.all_sau[data.ast_planetID[i]] > par.all_sau[iplanet]:    
-            model.rel_RA[i] += dRA
-            model.rel_Dec[i] += dDec
+            model.rel_RA[i] -= dRA
+            model.rel_Dec[i] -= dDec
 
         # If we are at the last companion, convert to sep, PA
         if iplanet == par.nplanets - 1:
@@ -1480,5 +1480,4 @@ def lnprior(Params par, double minjit=-20, double maxjit=20):
     if par.lam < -pi or par.lam >= 3*pi or par.jit < minjit or par.jit > maxjit:
         return zeroprior
 
-    # 1/m prior on the primary, uniform prior on the secondary.
-    return log(sin(par.inc)*1./(par.sau*par.mpri))
+    return log(sin(par.inc))
