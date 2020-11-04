@@ -103,7 +103,7 @@ class OrbitPlots:
         # load relative astrometry data:
         try: #if os.access(self.relAstfile,os.R_OK):
             self.have_reldat = True
-            self.ep_relAst_obs, self.relsep_obs, self.relsep_obs_err, self.PA_obs, self.PA_obs_err, self.ast_indx = self.load_relAst_data(self.iplanet)
+            self.ep_relAst_obs, self.relsep_obs, self.relsep_obs_err, self.PA_obs, self.PA_obs_err, self.ast_indx, self.ast_data_source = self.load_relAst_data(self.iplanet)
         except: #else:
             self.have_reldat = False
         # load HGCA data:
@@ -213,9 +213,17 @@ class OrbitPlots:
         except:
             icompanion = np.zeros(reldat.shape[0]).astype(int)
 
+        try:
+            data_source = np.genfromtxt(self.relAstfile, usecols=(7), dtype=str).flatten()
+            # replace ~ with spaces
+            data_source = np.array([entry.replace('~', ' ') for entry in data_source])
+        except:
+            data_source = ['unknown'] * len(reldat)
+
         indx = np.where(icompanion == iplanet)
         if iplanet is not None:
             reldat = reldat[indx]
+            data_source = data_source[indx]
         if len(reldat) == 0:
             return None
 
@@ -233,7 +241,7 @@ class OrbitPlots:
         PA_obs = reldat[:, 3]
         PA_obs_err = reldat[:, 4]
         
-        return ep_relAst_obs, relsep_obs, relsep_obs_err, PA_obs, PA_obs_err, indx
+        return ep_relAst_obs, relsep_obs, relsep_obs_err, PA_obs, PA_obs_err, indx, data_source
     
     def load_HGCA_data(self):
         """
@@ -792,6 +800,8 @@ class OrbitPlots:
     def PA(self):
     
         if self.have_reldat:
+            # check for the existence of data source labels for all the astrometric data
+            all_data_have_a_source = np.all([i.lower() != 'unknown' for i in self.ast_data_source])
             # if there is a large dynamic range in errors, make a smaller O-C plot as well.
             make_smaller_oc = False
             if np.max(self.relsep_obs_err)/np.min(self.relsep_obs_err) > 5:
@@ -823,16 +833,26 @@ class OrbitPlots:
             ep_relAst_obs_calendar = []
             for i in range(len(self.ep_relAst_obs)):
                 ep_relAst_obs_calendar.append(self.JD_to_calendar(self.ep_relAst_obs[i]))
-            axes[0].errorbar(ep_relAst_obs_calendar, self.PA_obs, yerr=self.PA_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-            axes[0].scatter(ep_relAst_obs_calendar, self.PA_obs, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+            ep_relAst_obs_calendar = np.array(ep_relAst_obs_calendar)
+
             dat_OC = self.PA_obs - orb_ml.PA[self.ast_indx]
+            if not all_data_have_a_source:
+                colors = [self.marker_color]
+            else:
+                colors = list(mcolors.BASE_COLORS)[:len(set(self.ast_data_source))] # cycle through the matplotlib colors
 
-            axes[1].errorbar(ep_relAst_obs_calendar, dat_OC, yerr=self.PA_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-            axes[1].scatter(ep_relAst_obs_calendar, dat_OC, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
-            axes[-1].errorbar(ep_relAst_obs_calendar, dat_OC, yerr=self.PA_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-            axes[-1].scatter(ep_relAst_obs_calendar, dat_OC, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+            for data_source, color in zip(set(self.ast_data_source), colors):
+                this_source = self.ast_data_source == data_source
+                axes[0].errorbar(ep_relAst_obs_calendar[this_source], self.PA_obs[this_source], yerr=self.PA_obs_err[this_source], color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299, label=data_source)
+                axes[0].scatter(ep_relAst_obs_calendar[this_source], self.PA_obs[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
 
-            # axes settings
+
+                axes[1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.PA_obs_err[this_source], color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+
+                axes[-1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.PA_obs_err[this_source], color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[-1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+            # setting axis limits
             # ax1
             xlim = (np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1)
             axes[0].set_xlim(xlim)
@@ -854,6 +874,9 @@ class OrbitPlots:
                 axes[-1].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
                 axes[-1].set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
                 axes[-1].set_ylabel('O-C', labelpad=17, fontsize=13)
+
+            if all_data_have_a_source:
+                axes[0].legend(loc='best', prop={'size': 8})
 
             # from advanced plotting settings in config.ini
             if self.set_limit:
