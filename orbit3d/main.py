@@ -177,7 +177,7 @@ def lnprob(theta, returninfo=False, RVoffsets=False, use_epoch_astrometry=False,
 
     if priors is not None:
         #params = orbit.Params(theta, icompanion_propermotion, nplanets)
-        return orbit.lnprior(params) + orbit.calcL(data, params, model) - 0.5*(params.mpri - priors['mpri'])**2/priors['mpri_sig']**2
+        return lnp + orbit.calcL(data, params, model) - 0.5*(params.mpri - priors['mpri'])**2/priors['mpri_sig']**2
     else:
         return lnp - np.log(params.mpri) + orbit.calcL(data, params, model)
 

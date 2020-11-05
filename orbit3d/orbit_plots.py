@@ -165,6 +165,7 @@ class OrbitPlots:
         extras = extras[:, self.burnin:, :].reshape(-1, extras.shape[-1])
         beststep = np.where(self.lnp == self.lnp.max())
         self.nplanets = chain.shape[-1]//7
+        #chain[:, 9] = 0.1
         return chain, beststep, extras
         
     def load_obsRV_data(self):
@@ -218,8 +219,7 @@ class OrbitPlots:
             # replace ~ with spaces
             data_source = np.array([entry.replace('~', ' ') for entry in data_source])
         except:
-            data_source = ['unknown'] * len(reldat)
-
+            data_source = np.array(['unknown'] * len(reldat))
         indx = np.where(icompanion == iplanet)
         if iplanet is not None:
             reldat = reldat[indx]
@@ -473,7 +473,6 @@ class OrbitPlots:
 
         # plot the most likely one
         ax.plot(self.epoch_calendar, orb_ml.RV, color='black')
-        np.savetxt('/home/gmbrandt/Downloads/orb_reference.txt', np.vstack([self.epoch_calendar, orb_ml.RV]))
 
         # plot the observed data points (RV & relAst)
         rv_epoch_list = []
@@ -672,6 +671,8 @@ class OrbitPlots:
     def relsep(self):
     
         if self.have_reldat:
+            # check for the existence of data source labels for all the astrometric data
+            all_data_have_a_source = np.all([i.lower() != 'unknown' for i in self.ast_data_source])
             # if there is a large dynamic range in errors, make a smaller O-C plot as well.
             make_smaller_oc = False
             if np.max(self.relsep_obs_err)/np.min(self.relsep_obs_err) > 5:
@@ -699,40 +700,47 @@ class OrbitPlots:
 
             # plot the observed data points
             orb_ml = Orbit(self, step='best', epochs='observed')
-
-            ep_relAst_obs_calendar = []
-            for i in range(len(self.ep_relAst_obs)):
-                ep_relAst_obs_calendar.append(self.JD_to_calendar(self.ep_relAst_obs[i]))
-            axes[0].errorbar(ep_relAst_obs_calendar, self.relsep_obs, yerr=self.relsep_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-            axes[0].scatter(ep_relAst_obs_calendar, self.relsep_obs, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
-
+            ep_relAst_obs_calendar = self.JD_to_calendar(self.ep_relAst_obs)
             dat_OC = self.relsep_obs - orb_ml.relsep[self.ast_indx]
+            OCseparation_unit = '(as)'
+            if not all_data_have_a_source:
+                colors = [self.marker_color] * 50  # long list of the same color
+            else:
+                colors = list(mcolors.BASE_COLORS)[:len(set(self.ast_data_source))] # cycle through the matplotlib colors
 
-            axes[1].errorbar(ep_relAst_obs_calendar, dat_OC, yerr=self.relsep_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-            axes[1].scatter(ep_relAst_obs_calendar, dat_OC, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+            for data_source, color in zip(set(self.ast_data_source), colors):
+                this_source = self.ast_data_source == data_source
+                axes[0].errorbar(ep_relAst_obs_calendar[this_source], self.relsep_obs[this_source], yerr=self.relsep_obs_err[this_source],
+                                 color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299, label=data_source)
+                axes[0].scatter(ep_relAst_obs_calendar[this_source], self.relsep_obs[this_source], s=45, facecolors='none', edgecolors='k',
+                                alpha=1, zorder=300)
+                axes[1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.relsep_obs_err[this_source], color=color,
+                                 fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
 
-            axes[-1].errorbar(ep_relAst_obs_calendar, dat_OC, yerr=self.relsep_obs_err, color=self.marker_color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-            axes[-1].scatter(ep_relAst_obs_calendar, dat_OC, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+                axes[-1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.relsep_obs_err[this_source], color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[-1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
 
             # axes settings
             # ax1
             xlim = (np.min(ep_relAst_obs_calendar)-.1, np.max(ep_relAst_obs_calendar)+.2)
             axes[0].set_xlim(xlim)
-            axes[0].set_ylim((np.min(self.relsep_obs)*0.9, np.max(self.relsep_obs)*1.1))
+            axes[0].set_ylim((np.min(self.relsep_obs)*0.9, np.max(self.relsep_obs)*1.3))
             axes[0].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
-            axes[0].set_ylabel('Separation (arcsec)', labelpad=13, fontsize=13)
+            axes[0].set_ylabel('Separation (as)', labelpad=13, fontsize=13)
             # ax2
-            three_sigma = 3 * np.max(self.relsep_obs_err)
-            ylim = np.min(dat_OC) - three_sigma, np.max(dat_OC) + three_sigma
+            max_error = np.max(self.relsep_obs_err)
+            ylim = np.min(dat_OC) - max_error, np.max(dat_OC) + max_error
+            #ylim = (-4, 4)
             axes[1].set_ylim(ylim)
-            axes[1].set_ylabel('O-C', labelpad=-2, fontsize=13)
+            axes[1].set_ylabel('O-C ' + OCseparation_unit, labelpad=-2, fontsize=13)
             # ax3
             if len(axes) == 3:
                 ylim = -5 * np.min(self.relsep_obs_err), 10 * np.min(self.relsep_obs_err)
                 axes[-1].set_ylim(ylim)
                 axes[-1].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
                 axes[-1].set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
-                axes[-1].set_ylabel('O-C', labelpad=-2, fontsize=13)
+                axes[-1].set_ylabel('O-C ' + OCseparation_unit, labelpad=-2, fontsize=13)
             
             # from advanced plotting settings in config.ini
             if self.set_limit:
@@ -740,6 +748,9 @@ class OrbitPlots:
                 axes[1].set_ylim(np.float(self.user_ylim[0]),np.float(self.user_ylim[1]))
                 axes[-1].set_xlim(np.float(self.user_xlim[0]), np.float(self.user_xlim[1]))
                 axes[-1].set_ylim(np.float(self.user_ylim[0]),np.float(self.user_ylim[1]))
+
+            if all_data_have_a_source:
+                axes[0].legend(loc='best', prop={'size': 8}, frameon=False)
 
             if self.show_title:
                 axes[0].set_title('Relative Separation vs. Epoch')
@@ -804,7 +815,7 @@ class OrbitPlots:
             all_data_have_a_source = np.all([i.lower() != 'unknown' for i in self.ast_data_source])
             # if there is a large dynamic range in errors, make a smaller O-C plot as well.
             make_smaller_oc = False
-            if np.max(self.relsep_obs_err)/np.min(self.relsep_obs_err) > 5:
+            if np.max(self.PA_obs_err)/np.min(self.PA_obs_err) > 5:
                 make_smaller_oc = True
 
             if make_smaller_oc:
@@ -830,14 +841,11 @@ class OrbitPlots:
             # plot the observed data points
             orb_ml = Orbit(self, 'best', epochs='observed')
 
-            ep_relAst_obs_calendar = []
-            for i in range(len(self.ep_relAst_obs)):
-                ep_relAst_obs_calendar.append(self.JD_to_calendar(self.ep_relAst_obs[i]))
-            ep_relAst_obs_calendar = np.array(ep_relAst_obs_calendar)
+            ep_relAst_obs_calendar = self.JD_to_calendar(self.ep_relAst_obs)
 
             dat_OC = self.PA_obs - orb_ml.PA[self.ast_indx]
             if not all_data_have_a_source:
-                colors = [self.marker_color]
+                colors = [self.marker_color] * 50  # long list of the same color
             else:
                 colors = list(mcolors.BASE_COLORS)[:len(set(self.ast_data_source))] # cycle through the matplotlib colors
 
@@ -856,16 +864,16 @@ class OrbitPlots:
             # ax1
             xlim = (np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1)
             axes[0].set_xlim(xlim)
-            axes[0].set_ylim((np.min(self.PA_obs)*0.9, np.max(self.PA_obs)*1.1))
+            axes[0].set_ylim((np.min(self.PA_obs)*0.9, np.max(self.PA_obs)*1.3))
             axes[0].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
-            axes[0].set_ylabel(r'Position Angle ($^{\circ}$)', labelpad=5, fontsize=13)
+            axes[0].set_ylabel(r'Position Angle ($(^{\circ})$)', labelpad=5, fontsize=13)
             # axes[1]
-            three_sigma = 3 * np.max(self.PA_obs_err)
-            ylim = np.min(dat_OC) - three_sigma, np.max(dat_OC) + three_sigma
+            up = np.max(self.PA_obs_err)
+            ylim = np.min(dat_OC) - up, np.max(dat_OC) + up
             axes[1].set_ylim(ylim)
             axes[1].xaxis.set_minor_locator(AutoMinorLocator())
             axes[1].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
-            axes[1].set_ylabel('O-C', labelpad=-2, fontsize=13)
+            axes[1].set_ylabel(r'O-C $(^{\circ})$', labelpad=-2, fontsize=13)
             #axes[-1]
             if len(axes) == 3:
                 ylim = -5 * np.min(self.PA_obs_err), 10 * np.min(self.PA_obs_err)
@@ -873,10 +881,10 @@ class OrbitPlots:
                 axes[-1].xaxis.set_minor_locator(AutoMinorLocator())
                 axes[-1].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
                 axes[-1].set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
-                axes[-1].set_ylabel('O-C', labelpad=17, fontsize=13)
+                axes[-1].set_ylabel(r'O-C $(^{\circ})$', labelpad=17, fontsize=13)
 
             if all_data_have_a_source:
-                axes[0].legend(loc='best', prop={'size': 8})
+                axes[0].legend(loc='best', prop={'size': 8}, frameon=False)
 
             # from advanced plotting settings in config.ini
             if self.set_limit:
