@@ -15,7 +15,7 @@ import matplotlib.cm as cm
 from matplotlib.ticker import NullFormatter
 from matplotlib.ticker import AutoMinorLocator
 
-#plt.style.use('/home/gmbrandt/Documents/papers/mesa.mplstyle')
+plt.style.use('/home/gmbrandt/Documents/papers/mesa.mplstyle')
 
 
 class Orbit:
@@ -165,7 +165,7 @@ class OrbitPlots:
         extras = extras[:, self.burnin:, :].reshape(-1, extras.shape[-1])
         beststep = np.where(self.lnp == self.lnp.max())
         self.nplanets = chain.shape[-1]//7
-        #chain[:, 9] = 0.1
+        #chain[:, 9] = 0.03  # artificially set the mass of the second companion to zero.
         return chain, beststep, extras
         
     def load_obsRV_data(self):
@@ -674,7 +674,7 @@ class OrbitPlots:
             # check for the existence of data source labels for all the astrometric data
             all_data_have_a_source = np.all([i.lower() != 'unknown' for i in self.ast_data_source])
             # if there is a large dynamic range in errors, make a smaller O-C plot as well.
-            make_smaller_oc = False
+            make_smaller_oc = True
             if np.max(self.relsep_obs_err)/np.min(self.relsep_obs_err) > 5:
                 make_smaller_oc = True
 
@@ -687,12 +687,14 @@ class OrbitPlots:
             # plot the randomly selected curves
 
             # the following 1, -1 indexing takes care of whether or not there are 3 or 2 different figure axes.
+            OCseparation_unit = '(mas)'
+            oc_mp = 1000
             for i in range(self.num_orbits):
                 orb = Orbit(self, step=self.rand_idx[i]) 
                 
                 axes[0].plot(self.epoch_calendar, orb.relsep, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
-                axes[1].plot(self.epoch_calendar, orb.relsep - orb_ml.relsep, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
-                axes[-1].plot(self.epoch_calendar, orb.relsep - orb_ml.relsep, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
+                axes[1].plot(self.epoch_calendar, oc_mp*(orb.relsep - orb_ml.relsep), color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
+                #axes[-1].plot(self.epoch_calendar, oc_mp*(orb.relsep - orb_ml.relsep), color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
 
             axes[0].plot(self.epoch_calendar, orb_ml.relsep, color='black')
             axes[1].plot(self.epoch_calendar, np.zeros(len(self.epoch)), 'k--', dashes=(5, 5))
@@ -702,45 +704,46 @@ class OrbitPlots:
             orb_ml = Orbit(self, step='best', epochs='observed')
             ep_relAst_obs_calendar = self.JD_to_calendar(self.ep_relAst_obs)
             dat_OC = self.relsep_obs - orb_ml.relsep[self.ast_indx]
-            OCseparation_unit = '(as)'
             if not all_data_have_a_source:
                 colors = [self.marker_color] * 50  # long list of the same color
             else:
                 colors = list(mcolors.BASE_COLORS)[:len(set(self.ast_data_source))] # cycle through the matplotlib colors
-
+            bad_oc = np.genfromtxt('/home/gmbrandt/oc_betapicczeromass.txt')  # for synthetic plot
             for data_source, color in zip(set(self.ast_data_source), colors):
                 this_source = self.ast_data_source == data_source
                 axes[0].errorbar(ep_relAst_obs_calendar[this_source], self.relsep_obs[this_source], yerr=self.relsep_obs_err[this_source],
                                  color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299, label=data_source)
                 axes[0].scatter(ep_relAst_obs_calendar[this_source], self.relsep_obs[this_source], s=45, facecolors='none', edgecolors='k',
                                 alpha=1, zorder=300)
-                axes[1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.relsep_obs_err[this_source], color=color,
+                axes[1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source]*oc_mp, yerr=self.relsep_obs_err[this_source]*oc_mp, color=color,
                                  fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-                axes[1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+                axes[1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source]*oc_mp, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
 
-                axes[-1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.relsep_obs_err[this_source], color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-                axes[-1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+                axes[-1].errorbar(ep_relAst_obs_calendar[this_source], bad_oc[this_source]*oc_mp, yerr=self.relsep_obs_err[this_source]*oc_mp, color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[-1].scatter(ep_relAst_obs_calendar[this_source], bad_oc[this_source]*oc_mp, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
 
             # axes settings
             # ax1
             xlim = (np.min(ep_relAst_obs_calendar)-.1, np.max(ep_relAst_obs_calendar)+.2)
             axes[0].set_xlim(xlim)
-            axes[0].set_ylim((np.min(self.relsep_obs)*0.9, np.max(self.relsep_obs)*1.3))
+            axes[0].set_ylim((np.min(self.relsep_obs)*0.9, np.max(self.relsep_obs)*1.1))
             axes[0].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
             axes[0].set_ylabel('Separation (as)', labelpad=13, fontsize=13)
             # ax2
             max_error = np.max(self.relsep_obs_err)
-            ylim = np.min(dat_OC) - max_error, np.max(dat_OC) + max_error
+            ylim = np.min(dat_OC*oc_mp) - max_error*oc_mp, np.max(dat_OC*oc_mp) + max_error*oc_mp
             #ylim = (-4, 4)
             axes[1].set_ylim(ylim)
             axes[1].set_ylabel('O-C ' + OCseparation_unit, labelpad=-2, fontsize=13)
             # ax3
             if len(axes) == 3:
-                ylim = -5 * np.min(self.relsep_obs_err), 10 * np.min(self.relsep_obs_err)
+                #ylim = -5 * np.min(self.relsep_obs_err*oc_mp), 10 * np.min(self.relsep_obs_err*oc_mp)
+                ylim = (np.min(bad_oc)*oc_mp*1.1, np.max(bad_oc)*oc_mp*1.1)   # for synthetic plot
                 axes[-1].set_ylim(ylim)
                 axes[-1].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
                 axes[-1].set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
-                axes[-1].set_ylabel('O-C ' + OCseparation_unit, labelpad=-2, fontsize=13)
+                #axes[-1].set_ylabel(r'O-C ' + OCseparation_unit, labelpad=-2, fontsize=13)
+                axes[-1].set_ylabel(r'O-C (mas) ($M_{\beta~Pic~c} = 0$)', labelpad=-2, fontsize=13)   # for synthetic plot
             
             # from advanced plotting settings in config.ini
             if self.set_limit:
@@ -749,8 +752,8 @@ class OrbitPlots:
                 axes[-1].set_xlim(np.float(self.user_xlim[0]), np.float(self.user_xlim[1]))
                 axes[-1].set_ylim(np.float(self.user_ylim[0]),np.float(self.user_ylim[1]))
 
-            if all_data_have_a_source:
-                axes[0].legend(loc='best', prop={'size': 8}, frameon=False)
+            #if all_data_have_a_source:
+            #    axes[0].legend(loc='best', prop={'size': 8}, frameon=False)
 
             if self.show_title:
                 axes[0].set_title('Relative Separation vs. Epoch')
@@ -866,7 +869,7 @@ class OrbitPlots:
             axes[0].set_xlim(xlim)
             axes[0].set_ylim((np.min(self.PA_obs)*0.9, np.max(self.PA_obs)*1.3))
             axes[0].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
-            axes[0].set_ylabel(r'Position Angle ($(^{\circ})$)', labelpad=5, fontsize=13)
+            axes[0].set_ylabel(r'Position Angle $(^{\circ})$', labelpad=5, fontsize=13)
             # axes[1]
             up = np.max(self.PA_obs_err)
             ylim = np.min(dat_OC) - up, np.max(dat_OC) + up
@@ -884,7 +887,7 @@ class OrbitPlots:
                 axes[-1].set_ylabel(r'O-C $(^{\circ})$', labelpad=17, fontsize=13)
 
             if all_data_have_a_source:
-                axes[0].legend(loc='best', prop={'size': 8}, frameon=False)
+                axes[0].legend(loc='best', prop={'size': 8}, frameon=True)
 
             # from advanced plotting settings in config.ini
             if self.set_limit:
