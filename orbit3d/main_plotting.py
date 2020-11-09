@@ -53,6 +53,7 @@ def initialize_plot_options(config):
     # customized range of epochs
     OP.start_epoch = config.getfloat('plotting', 'start_epoch', fallback=0)
     OP.end_epoch = config.getfloat('plotting', 'end_epoch', fallback=0)
+    OP.custom_corner_plot = config.getboolean('plotting', 'custom_corner_plot', fallback=False)
     
     # predicted epoch positions
     OP.predicted_ep = config.get('plotting', 'predicted_years', fallback=('1990,2000,2010,2020,2030')).split(",")
