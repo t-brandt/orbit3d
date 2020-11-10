@@ -13,6 +13,7 @@ plot_orbit --output-dir ./Plots --config-file ./orbit3d/tests/config_Gl758.ini
 
 from __future__ import print_function
 from orbit3d.config import parse_args_plotting
+import numpy as np # used in the evaluation of the predicted epoch table positions if the user uses python syntax in the config file
 from configparser import ConfigParser
 from orbit3d import orbit_plots         # import orbit_plots plotting package
 
@@ -58,6 +59,9 @@ def initialize_plot_options(config):
     # predicted epoch positions
     OP.predicted_ep = config.get('plotting', 'predicted_years', fallback=('1990,2000,2010,2020,2030')).split(",")
     OP.predicted_ep_ast = config.getfloat('plotting', 'position_predict', fallback=2000)
+    #
+    OP.position_predict_table_epochs = eval(config.get('plotting', 'position_predict_table_epochs', fallback=('2020, 2021')))
+    OP.position_predict_table_epoch_format = config.get('plotting', 'position_predict_table_epoch_format', fallback='decimalyear')
     # how many random orbits
     OP.num_orbits = config.getint('plotting', 'num_orbits', fallback = 50)
     
@@ -116,6 +120,7 @@ def run():
     plot_rel_rv = config.getboolean('plotting', 'Relative_RV_plot', fallback=False)
     plot_rel_sep = config.getboolean('plotting', 'Relative_separation_plot', fallback=False)
     plot_position_angle = config.getboolean('plotting', 'Position_angle_plot', fallback=False)
+    make_astrometric_prediction_table = config.getboolean('plotting', 'Astrometric_prediction_table', fallback=False)
     plot_proper_motions = config.getboolean('plotting', 'Proper_motion_plot', fallback=False)
     plot_corner = config.getboolean('plotting', 'Corner_plot', fallback=False)
     save_params = config.getboolean('save_results', 'save_params', fallback=True)
@@ -139,6 +144,8 @@ def run():
         OPs.proper_motions()
     if plot_corner:
         OPs.plot_corner()
+    if make_astrometric_prediction_table:
+        OPs.make_astrometric_prediction_table()
     if save_params:
         OPs.save_data()
 

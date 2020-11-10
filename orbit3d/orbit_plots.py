@@ -14,6 +14,8 @@ import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 from matplotlib.ticker import NullFormatter
 from matplotlib.ticker import AutoMinorLocator
+from astropy.table import Table
+from astropy.io import ascii as asciiastropy
 
 plt.style.use('/home/gmbrandt/Documents/papers/mesa.mplstyle')
 
@@ -1147,20 +1149,20 @@ class OrbitPlots:
 #astrometric prediction plot
 
     def astrometric_prediction_plot(self):
+        # NOTE ONLY WORKS IN DECIMAL YEAR
         fig = plt.figure(figsize=(5, 5))
         ax = fig.add_subplot(111)
-        dens, cdf_func, xmin, xmax, ymin, ymax, x, y = self.astrometric_prediction(self.predicted_ep_ast, self.iplanet)
-        ax.imshow(dens[::-1], extent=(xmin*1000, xmax*1000, ymin*1000, ymax*1000),
+        dens, cdf_func, xmin, xmax, ymin, ymax, x, y = self.astrometric_prediction(self.calendar_to_JD(self.predicted_ep_ast), self.iplanet)
+        # convert to mas
+        xmin, xmax, ymin, ymax, x, y = 1000 * xmin, 1000 * xmax, 1000 * ymin, 1000 * ymax, 1000 * x, 1000 * y
+        ax.imshow(dens[::-1], extent=(xmin, xmax, ymin, ymax),
                   interpolation='nearest', aspect=1, cmap=cm.hot_r)
 
         # Mark the central star if (0, 0) is within the axis limits
         if xmin*xmax < 0 and ymin*ymax < 0:
             ax.plot(0, 0, marker='*', markersize=15, color='c')
-
-        x = 0.5*(x[1:] + x[:-1])
-        y = 0.5*(y[1:] + y[:-1])
         levels = [cdf_func(p) for p in [1 - 0.9973, 1 - 0.954, 1 - 0.683]]
-        ax.contour(x*1000, y*1000, dens, levels=levels, colors=['k', 'C0', 'b'])
+        ax.contour(x, y, dens, levels=levels, colors=['k', 'C0', 'b'])
         ax.set_xlabel(r'$\mathrm{\Delta \alpha}$ (mas)', fontsize=14)
         ax.set_ylabel(r'$\mathrm{\Delta \delta}$ (mas)', fontsize=14)
         ax.annotate(s='Location of %s, %.1f' % (self.text_name, self.predicted_ep_ast), fontsize=14, xy=(0.1, 0.9), xycoords='axes fraction')
@@ -1168,7 +1170,43 @@ class OrbitPlots:
         plt.tight_layout()
         plt.savefig(os.path.join(self.outputdir,'astrometric_prediction_' + self.title)+'.pdf', transparent=True, pad_inches=0)
 
-    def astrometric_prediction(self, epoch, iplanet, nbins=500):
+    def make_astrometric_prediction_table(self):
+        # WORKS IN ANY DATE FORMAT, JUST SPECIFY IT IN THE CONFIG WITH position_predict_table_epoch_format
+        #print(self.position_predict_table_epochs, self.position_predict_table_epoch_format)
+        epochs = Time(self.position_predict_table_epochs, format=self.position_predict_table_epoch_format.lower())
+        planet_idx = np.ones_like(epochs) * self.iplanet
+        #planet_idx = np.hstack([np.ones_like(epochs)*i for i in range(self.nplanets)]) # for making a table of all the planets at once
+        #epochs = np.hstack([epochs, epochs]) # for making a table of all the planets at once
+        bl = np.zeros_like(epochs, dtype=float)
+        predicted_positions = Table({'epoch': epochs, 'planet': planet_idx, 'ra': bl, 'ra_err':bl, 'dec': bl, 'dec_err': bl})
+        for i, row in enumerate(predicted_positions):
+            dens, cdf_func, xmin, xmax, ymin, ymax, x, y = self.astrometric_prediction(row['epoch'].jd, row['planet'], nbins=500)
+            # convert to mas
+            xmin, xmax, ymin, ymax, x, y = 1000*xmin, 1000*xmax, 1000*ymin, 1000*ymax, 1000*x, 1000*y
+            # sum the density along each axis to get the mean and error in each direction
+            dens = dens
+            ra_dens, dec_dens = np.sum(dens, axis=1), np.sum(dens, axis=0)
+            ra, ra_err =  weighted_avg_and_std(x, ra_dens)
+            dec, dec_err = weighted_avg_and_std(y, dec_dens)
+            maxl = np.where(dens == np.max(dens))
+            maxl_ra, maxl_dec = x[maxl[0]], y[maxl[1]]
+            #print(maxl_ra, maxl_dec)
+            #print(ra, ra_err, dec, dec_err)
+            predicted_positions[i]['ra'] = ra
+            predicted_positions[i]['ra_err'] = ra_err
+            predicted_positions[i]['dec'] = dec
+            predicted_positions[i]['dec_err'] = dec_err
+            #print(predicted_positions[i])
+
+
+        # save the table both as a csv and as a latex table
+        outfile = os.path.join(self.outputdir,'astrometric_prediction_table' + self.title)
+        predicted_positions.write(outfile + '.csv', overwrite=True)
+        asciiastropy.write(predicted_positions, output=outfile + '.txt', Writer=asciiastropy.Latex,
+                           latexdict={'units': {'Time': 'JD', 'planet': '', r'$\alpha$': 'mas', r'$\sigma_{\alpha}$': 'mas',
+                                                r'$\delta$': 'mas', r'$\sigma_{\delta}$': 'mas'}}, overwrite=True)
+
+    def astrometric_prediction(self, JD_epoch, iplanet, nbins=500):
         # Fetch parameters as ndarrays
         par = self.chain.astype(float)
         mpri = par[:, 1]
@@ -1185,17 +1223,13 @@ class OrbitPlots:
         plx = self.extras[:, 0]
         plx = np.reshape(plx, -1)
 
-        # The date we want
-        JD_predict = self.calendar_to_JD(epoch)
-        print(Time(JD_predict, format='jd').mjd)
-
         data = orbit.Data(self.Hip, self.RVfile, self.relAstfile, verbose=False)
 
         # Solve Kepler's equation in array format given a different
         # eccentricity for each point.  This is the same Newton solver
         # used by radvel.
         period = np.sqrt(sau ** 3 / (mpri + msec)) * 365.25
-        MA = (2 * np.pi / period * (JD_predict - data.refep) + lam - arg) % (2 * np.pi)
+        MA = (2 * np.pi / period * (JD_epoch - data.refep) + lam - arg) % (2 * np.pi)
         E = MA + np.sign(np.sin(MA)) * 0.85 * ecc
         fi = E - ecc * np.sin(E) - MA
 
@@ -1250,6 +1284,10 @@ class OrbitPlots:
         dens_sorted = np.sort(dens.flatten())
         cdf = np.cumsum(dens_sorted) / np.sum(dens_sorted)
         cdf_func = interp1d(cdf, dens_sorted)
+        # convert x and y so they are the same shape as density.
+        #x = 0.5*(x[1:] + x[:-1])
+        #y = 0.5*(y[1:] + y[:-1])
+        x, y = x[:-1], y[:-1]
         return dens, cdf_func, xmin, xmax, ymin, ymax, x, y
 
 # 7. Corner plot
@@ -1442,3 +1480,14 @@ class OrbitPlots:
             
 #######
 # end of code
+
+def weighted_avg_and_std(values, weights):
+    """
+    Return the weighted average and standard deviation.
+
+    values, weights -- Numpy ndarrays with the same shape.
+    """
+    average = np.average(values, weights=weights)
+    # Fast and numerically precise:
+    variance = np.average((values-average)**2, weights=weights)
+    return (average, np.sqrt(variance))
