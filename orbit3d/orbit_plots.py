@@ -137,10 +137,10 @@ class OrbitPlots:
 
 ###################################### Define Functions ############################################
     def JD_to_calendar(self, JD):
-        return Time(JD, format='jd').jyear
+        return Time(JD, format='jd').decimalyear
 
     def calendar_to_JD(self, year):
-        return Time(year, format='jyear').jd
+        return Time(year, format='decimalyear').jd
 
     def define_epochs(self):
         """
@@ -461,18 +461,18 @@ class OrbitPlots:
     ########################### plot the RV orbits #######################
     
     def RV(self):
-        fig = plt.figure(figsize=(5.7, 6.5))
-        ax = fig.add_axes((0.15, 0.3, 0.8, 0.6))
+        fig, axes = plt.subplots(2, 1, figsize=(6, 7), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
         orb_ml = Orbit(self, 'best')
         # plot the 50 randomly selected curves
         for i in range(self.num_orbits):
             orb = Orbit(self, step=self.rand_idx[i])
             orb.RV += orb_ml.offset[0] - orb.offset[0]
                 
-            ax.plot(self.epoch_calendar, orb.RV, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
-
+            axes[0].plot(self.epoch_calendar, orb.RV, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
+            axes[1].plot(self.epoch_calendar, orb.RV - orb_ml.RV, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.3)
         # plot the most likely one
-        ax.plot(self.epoch_calendar, orb_ml.RV, color='black')
+        axes[0].plot(self.epoch_calendar, orb_ml.RV, color='black')
+        axes[1].axhline(y=0, color='k', ls='--')
 
         # plot the observed data points (RV & relAst)
         rv_epoch_list = []
@@ -484,37 +484,48 @@ class OrbitPlots:
 
         jit_ml = 10**(0.5*orb_ml.par.jit)
 
-        for i in range(self.nInst):
-            # faint error bars for jitter
-            ax.errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i],yerr=np.sqrt(self.RV_obs_err_dic[i] ** 2 + jit_ml**2), fmt=self.color_list[i] + 'o', ecolor='red',
-                        alpha=0.5, zorder=298)
-            # solid error bars for absence of jitter
-            ax.errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], yerr=np.sqrt(self.RV_obs_err_dic[i]**2 + 0), fmt=self.color_list[i]+'o', ecolor='black', alpha = 0.8, zorder = 299)
-            ax.scatter(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], facecolors='none', edgecolors='k', alpha = 0.8, zorder=300)
-            
-        ax.set_xlim(np.min(rv_epoch_list)-1, np.max(rv_epoch_list)+1)
-        x0, x1 = ax.get_xlim()
-        y0, y1 = ax.get_ylim()
-        ax.set_aspect((x1-x0)/(y1-y0))
-
-        # add the chisquared of the fit
+        # calculate the chisquared and O-C of the fit
         model_rv_vs_epoch = interp1d(self.epoch_calendar, orb_ml.RV)
         chisq = []
+        OC = []
         for i in range(self.nInst):
             ominusc = self.RV_obs_dic[i] + orb_ml.offset[i] - model_rv_vs_epoch(rv_epoch_list[i])
+            OC.append(ominusc)
             chisq.append(ominusc**2/(self.RV_obs_err_dic[i]**2 + jit_ml**2))
         chisq = np.sum(chisq)
-        ax.annotate(fr'$\chi^2 = {round(chisq, 2)}$', xy=(0.05, 0.05), xycoords='axes fraction')
+
+        for i in range(self.nInst):
+            # plot RV and fit:
+            # faint error bars for jitter
+            axes[0].errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i],yerr=np.sqrt(self.RV_obs_err_dic[i] ** 2 + jit_ml**2), fmt=self.color_list[i] + 'o', ecolor='red',
+                        alpha=0.5, zorder=298)
+            # solid error bars for absence of jitter
+            axes[0].errorbar(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], yerr=np.sqrt(self.RV_obs_err_dic[i]**2 + 0), fmt=self.color_list[i]+'o', ecolor='black', alpha = 0.8, zorder = 299)
+            axes[0].scatter(rv_epoch_list[i], self.RV_obs_dic[i] + orb_ml.offset[i], facecolors='none', edgecolors='k', alpha = 0.8, zorder=300)
+            # plot OC:
+            axes[1].errorbar(rv_epoch_list[i], OC[i], yerr=np.sqrt(self.RV_obs_err_dic[i] ** 2 + jit_ml**2), fmt=self.color_list[i] + 'o', ecolor='red',
+                        alpha=0.5, zorder=298)
+            # solid error bars for absence of jitter
+            axes[1].errorbar(rv_epoch_list[i], OC[i], yerr=np.sqrt(self.RV_obs_err_dic[i]**2 + 0), fmt=self.color_list[i]+'o', ecolor='black', alpha = 0.8, zorder = 299)
+            axes[1].scatter(rv_epoch_list[i], OC[i], facecolors='none', edgecolors='k', alpha = 0.8, zorder=300)
+
+        axes[0].set_xlim(np.min(rv_epoch_list)-1, np.max(rv_epoch_list)+1)
+        #x0, x1 = axes[0].get_xlim()
+        #y0, y1 = axes[0].get_ylim()
+        #axes[0].set_aspect((x1-x0)/(y1-y0))
+
+        # add the chisquared
+        axes[0].annotate(fr'$\chi^2 = {round(chisq, 2)}$', xy=(0.05, 0.05), xycoords='axes fraction')
         
         if self.set_limit:
-            ax.set_xlim(np.float(self.user_xlim[0]), np.float(self.user_xlim[1]))
+            axes[0].set_xlim(np.float(self.user_xlim[0]), np.float(self.user_xlim[1]))
             #ax.set_ylim(np.float(self.user_ylim[0]),np.float(self.user_ylim[1])) disable y limit setting.
         if self.show_title:
-            ax.set_title('Relative RV vs. Epoch')
+            axes[0].set_title('Relative RV vs. Epoch')
         if self.add_text:
-            ax.text(self.x_text,self.y_text, self.text_name, fontsize=15)
+            axes[0].text(self.x_text,self.y_text, self.text_name, fontsize=15)
         if self.usecolorbar:
-            cbar_ax = fig.add_axes([1.3, 0.325, 0.03, 0.55])
+            cbar_ax = fig.add_axes([1.32, 0.325, 0.03, 0.55]) # [left, bottom, width, height]
             if self.colorbar_size < 0 or self.colorbar_pad < 0:
                 cbar = fig.colorbar(self.sm, ax=cbar_ax, fraction=12)
             else:
@@ -526,11 +537,12 @@ class OrbitPlots:
                 cbar.ax.get_yaxis().labelpad=self.colorbar_pad
             fig.delaxes(cbar_ax)
             
-        ax.xaxis.set_minor_locator(AutoMinorLocator())
-        ax.yaxis.set_minor_locator(AutoMinorLocator())
-        ax.tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
-        ax.set_xlabel('Epoch (year)', labelpad = 10, fontsize=13)
-        ax.set_ylabel('RV (m/s)', fontsize=13)
+        #ax.xaxis.set_minor_locator(AutoMinorLocator())
+        #ax.yaxis.set_minor_locator(AutoMinorLocator())
+        axes[0].tick_params(direction='in', which='both', left=True, right=True, bottom=True, top=True)
+        axes[1].set_xlabel('Epoch (year)', labelpad = 10, fontsize=13)
+        axes[1].set_ylabel(r'$\Delta$RV (m/s)', fontsize=13)
+        axes[0].set_ylabel('RV (m/s)', fontsize=13)
 
         plt.tight_layout()
         print("Plotting RV orbits, your plot is generated at " + self.outputdir)
@@ -1134,94 +1146,11 @@ class OrbitPlots:
 
 #astrometric prediction plot
 
-    def astrometric_prediction(self, nbins=500):
-
-        # Fetch parameters as ndarrays
-        par = self.chain.astype(float)
-        mpri = par[:, 1]
-        msec = par[:, 2 + 7*self.iplanet]
-        sau = par[:, 3 + 7*self.iplanet]
-        esino = par[:, 4 + 7*self.iplanet]
-        ecoso = par[:, 5 + 7*self.iplanet]
-        inc = par[:, 6 + 7*self.iplanet]
-        asc = par[:, 7 + 7*self.iplanet]
-        lam = par[:, 8 + 7*self.iplanet]
-        arg = np.arctan2(esino, ecoso)
-        ecc = esino**2 + ecoso**2
-
-        plx = self.extras[:, 0]
-        plx = np.reshape(plx, -1)
-
-        # The date we want
-        JD_predict = self.calendar_to_JD(self.predicted_ep_ast)
-
-        data = orbit.Data(self.Hip, self.RVfile, self.relAstfile, verbose=False)
-
-        # Solve Kepler's equation in array format given a different
-        # eccentricity for each point.  This is the same Newton solver
-        # used by radvel.
-        
-        period = np.sqrt(sau**3/(mpri + msec))*365.25
-        MA = (2*np.pi/period*(JD_predict - data.refep) + lam - arg)%(2*np.pi)
-        E = MA + np.sign(np.sin(MA))*0.85*ecc
-        fi = E - ecc*np.sin(E) - MA
-
-        for i in range(10):
-            fip = 1 - ecc*np.cos(E)
-            fipp = ecc*np.sin(E)
-            fippp = 1 - fip
-            d1 = -fi/fip
-            d1 = -fi/(fip + d1*fipp/2.)
-            d1 = -fi/(fip + d1*fipp/2. + d1**2*fippp/6.)
-            E += d1
-            fi = E - ecc*np.sin(E) - MA
-
-        # Thiele-Innes constants -> relative separation.
-        A = np.cos(arg)*np.cos(asc) - np.sin(arg)*np.sin(asc)*np.cos(inc)
-        B = np.cos(arg)*np.sin(asc) + np.sin(arg)*np.cos(asc)*np.cos(inc)
-        F = -np.sin(arg)*np.cos(asc) - np.cos(arg)*np.sin(asc)*np.cos(inc)
-        G = -np.sin(arg)*np.sin(asc) + np.cos(arg)*np.cos(asc)*np.cos(inc)
-        
-        X = np.cos(E) - ecc
-        Y = np.sin(E)*np.sqrt(1 - ecc**2)
-        
-        dra = (B*X + G*Y)*(sau)*plx
-        ddec = (A*X + F*Y)*(sau)*plx
-
-        # Set limits on plot to include basically all of the data.
-        
-        ramin = stats.scoreatpercentile(dra, 0.1)
-        ramax = stats.scoreatpercentile(dra, 99.9)
-        decmin = stats.scoreatpercentile(ddec, 0.1)
-        decmax = stats.scoreatpercentile(ddec, 99.9)
-
-        diff = max(ramax - ramin, decmax - decmin)*1.7
-        xmin = 0.5*(ramin + ramax) - diff/2.
-        xmax = xmin + diff
-        ymin = 0.5*(decmin + decmax) - diff/2.
-        ymax = ymin + diff
-
-        x = np.linspace(xmin, xmax, nbins)
-        y = np.linspace(ymin, ymax, nbins)
-
-        # Bin it up, then smooth it.  More points -> less smoothing.
-        
-        dens = np.histogram2d(dra, ddec, bins=[x, y])[0].T
-        
-        _x, _y = np.mgrid[-20:21, -20:21]
-        window = np.exp(-(_x**2 + _y**2)/20.*len(par)/len(x)**2)
-        dens = signal.convolve2d(dens, window, mode='same')
-        dens /= np.amax(dens)
-
-        # Make one-, two-, and three-sigma contours.
-        
-        dens_sorted = np.sort(dens.flatten())
-        cdf = np.cumsum(dens_sorted)/np.sum(dens_sorted)
-        cdf_func = interp1d(cdf, dens_sorted)
-        
+    def astrometric_prediction_plot(self):
         fig = plt.figure(figsize=(5, 5))
         ax = fig.add_subplot(111)
-        ax.imshow(dens[::-1], extent=(xmin, xmax, ymin, ymax),
+        dens, cdf_func, xmin, xmax, ymin, ymax, x, y = self.astrometric_prediction(self.predicted_ep_ast, self.iplanet)
+        ax.imshow(dens[::-1], extent=(xmin*1000, xmax*1000, ymin*1000, ymax*1000),
                   interpolation='nearest', aspect=1, cmap=cm.hot_r)
 
         # Mark the central star if (0, 0) is within the axis limits
@@ -1231,14 +1160,97 @@ class OrbitPlots:
         x = 0.5*(x[1:] + x[:-1])
         y = 0.5*(y[1:] + y[:-1])
         levels = [cdf_func(p) for p in [1 - 0.9973, 1 - 0.954, 1 - 0.683]]
-        ax.contour(x, y, dens, levels=levels, colors=['k', 'C0', 'b'])
-        ax.set_xlabel(r'$\mathrm{\Delta \alpha}$ (arcsec)', fontsize=14)
-        ax.set_ylabel(r'$\mathrm{\Delta \delta}$ [arcsec]', fontsize=14)
-        ax.text(xmax - 3e-2*(xmax - xmin), ymax - 7e-2*(ymax - ymin),
-                'Location of %s, %.1f' % (self.text_name, self.predicted_ep_ast), fontsize=14)
+        ax.contour(x*1000, y*1000, dens, levels=levels, colors=['k', 'C0', 'b'])
+        ax.set_xlabel(r'$\mathrm{\Delta \alpha}$ (mas)', fontsize=14)
+        ax.set_ylabel(r'$\mathrm{\Delta \delta}$ (mas)', fontsize=14)
+        ax.annotate(s='Location of %s, %.1f' % (self.text_name, self.predicted_ep_ast), fontsize=14, xy=(0.1, 0.9), xycoords='axes fraction')
         ax.invert_xaxis()
         plt.tight_layout()
         plt.savefig(os.path.join(self.outputdir,'astrometric_prediction_' + self.title)+'.pdf', transparent=True, pad_inches=0)
+
+    def astrometric_prediction(self, epoch, iplanet, nbins=500):
+        # Fetch parameters as ndarrays
+        par = self.chain.astype(float)
+        mpri = par[:, 1]
+        msec = par[:, 2 + 7 * iplanet]
+        sau = par[:, 3 + 7 * iplanet]
+        esino = par[:, 4 + 7 * iplanet]
+        ecoso = par[:, 5 + 7 * iplanet]
+        inc = par[:, 6 + 7 * iplanet]
+        asc = par[:, 7 + 7 * iplanet]
+        lam = par[:, 8 + 7 * iplanet]
+        arg = np.arctan2(esino, ecoso)
+        ecc = esino ** 2 + ecoso ** 2
+
+        plx = self.extras[:, 0]
+        plx = np.reshape(plx, -1)
+
+        # The date we want
+        JD_predict = self.calendar_to_JD(epoch)
+        print(Time(JD_predict, format='jd').mjd)
+
+        data = orbit.Data(self.Hip, self.RVfile, self.relAstfile, verbose=False)
+
+        # Solve Kepler's equation in array format given a different
+        # eccentricity for each point.  This is the same Newton solver
+        # used by radvel.
+        period = np.sqrt(sau ** 3 / (mpri + msec)) * 365.25
+        MA = (2 * np.pi / period * (JD_predict - data.refep) + lam - arg) % (2 * np.pi)
+        E = MA + np.sign(np.sin(MA)) * 0.85 * ecc
+        fi = E - ecc * np.sin(E) - MA
+
+        for i in range(10):
+            fip = 1 - ecc * np.cos(E)
+            fipp = ecc * np.sin(E)
+            fippp = 1 - fip
+            d1 = -fi / fip
+            d1 = -fi / (fip + d1 * fipp / 2.)
+            d1 = -fi / (fip + d1 * fipp / 2. + d1 ** 2 * fippp / 6.)
+            E += d1
+            fi = E - ecc * np.sin(E) - MA
+
+        # Thiele-Innes constants -> relative separation.
+        A = np.cos(arg) * np.cos(asc) - np.sin(arg) * np.sin(asc) * np.cos(inc)
+        B = np.cos(arg) * np.sin(asc) + np.sin(arg) * np.cos(asc) * np.cos(inc)
+        F = -np.sin(arg) * np.cos(asc) - np.cos(arg) * np.sin(asc) * np.cos(inc)
+        G = -np.sin(arg) * np.sin(asc) + np.cos(arg) * np.cos(asc) * np.cos(inc)
+
+        X = np.cos(E) - ecc
+        Y = np.sin(E) * np.sqrt(1 - ecc ** 2)
+
+        dra = (B * X + G * Y) * (sau) * plx
+        ddec = (A * X + F * Y) * (sau) * plx
+
+        # Set limits on plot to include basically all of the data.
+
+        ramin = stats.scoreatpercentile(dra, 0.1)
+        ramax = stats.scoreatpercentile(dra, 99.9)
+        decmin = stats.scoreatpercentile(ddec, 0.1)
+        decmax = stats.scoreatpercentile(ddec, 99.9)
+
+        diff = max(ramax - ramin, decmax - decmin) * 1.7
+        xmin = 0.5 * (ramin + ramax) - diff / 2.
+        xmax = xmin + diff
+        ymin = 0.5 * (decmin + decmax) - diff / 2.
+        ymax = ymin + diff
+        x = np.linspace(xmin, xmax, nbins)
+        y = np.linspace(ymin, ymax, nbins)
+
+        # Bin it up, then smooth it.  More points -> less smoothing.
+
+        dens = np.histogram2d(dra, ddec, bins=[x, y])[0].T
+
+        _x, _y = np.mgrid[-20:21, -20:21]
+        window = np.exp(-(_x ** 2 + _y ** 2) / 20. * len(par) / len(x) ** 2)
+        dens = signal.convolve2d(dens, window, mode='same')
+        dens /= np.amax(dens)
+
+        # Make one-, two-, and three-sigma contours.
+
+        dens_sorted = np.sort(dens.flatten())
+        cdf = np.cumsum(dens_sorted) / np.sum(dens_sorted)
+        cdf_func = interp1d(cdf, dens_sorted)
+        return dens, cdf_func, xmin, xmax, ymin, ymax, x, y
 
 # 7. Corner plot
     ################################################################################################
