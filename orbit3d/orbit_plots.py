@@ -1180,6 +1180,7 @@ class OrbitPlots:
         bl = np.zeros_like(epochs, dtype=float)
         predicted_positions = Table({'epoch': epochs, 'planet': planet_idx, 'ra': bl, 'ra_err':bl, 'dec': bl, 'dec_err': bl})
         for i, row in enumerate(predicted_positions):
+            print(f'predicting epoch {i} of {len(epochs)}')
             dens, cdf_func, xmin, xmax, ymin, ymax, x, y = self.astrometric_prediction(row['epoch'].jd, row['planet'], nbins=500)
             # convert to mas
             xmin, xmax, ymin, ymax, x, y = 1000*xmin, 1000*xmax, 1000*ymin, 1000*ymax, 1000*x, 1000*y
@@ -1198,12 +1199,30 @@ class OrbitPlots:
             predicted_positions[i]['dec_err'] = dec_err
             #print(predicted_positions[i])
 
-
         # save the table both as a csv and as a latex table
         outfile = os.path.join(self.outputdir,'astrometric_prediction_table' + self.title)
+        predicted_positions = Table(predicted_positions, names=(self.position_predict_table_epoch_format, 'planet', r'$\alpha$ (mas)',
+                                                                r'$\sigma_{\alpha}$ (mas)',
+                                                                r'$\delta$ (mas)', r'$\sigma_{\delta}$ (mas)'),
+                                    dtype=('f4', 'i4', 'f4', 'f4', 'f4', 'f4'))
+        # truncate sig figs on date to 0.001 MJD
+        predicted_positions[self.position_predict_table_epoch_format] = np.round(predicted_positions[self.position_predict_table_epoch_format].value, 3)
+        for i in range(len(predicted_positions)):
+            # truncate sig figs on measurements to nearest non zero
+            ra_places_after0 = num_digits_to_round(predicted_positions[i][r'$\sigma_{\alpha}$ (mas)'])
+            predicted_positions[i][r'$\alpha$ (mas)'] = np.round(predicted_positions[i][r'$\alpha$ (mas)'], ra_places_after0)
+            predicted_positions[i][r'$\sigma_{\alpha}$ (mas)'] = round_to(predicted_positions[i][r'$\sigma_{\alpha}$ (mas)'], 2)
+            dec_places_after0 = num_digits_to_round(predicted_positions[i][r'$\sigma_{\delta}$ (mas)'])
+            predicted_positions[i][r'$\delta$ (mas)'] = np.round(predicted_positions[i][r'$\delta$ (mas)'], dec_places_after0)
+            predicted_positions[i][r'$\sigma_{\delta}$ (mas)'] = round_to(predicted_positions[i][r'$\sigma_{\delta}$ (mas)'], 2)
+
+        # remove the planet column if it is not needed:
+        if len(set(predicted_positions['planet'])) == 1:
+            del predicted_positions['planet']
+
         predicted_positions.write(outfile + '.csv', overwrite=True)
         asciiastropy.write(predicted_positions, output=outfile + '.txt', Writer=asciiastropy.Latex,
-                           latexdict={'units': {'Time': 'JD', 'planet': '', r'$\alpha$': 'mas', r'$\sigma_{\alpha}$': 'mas',
+                           latexdict={'units': {'Time': 'MJD', 'planet': '', r'$\alpha$': 'mas', r'$\sigma_{\alpha}$': 'mas',
                                                 r'$\delta$': 'mas', r'$\sigma_{\delta}$': 'mas'}}, overwrite=True)
 
     def astrometric_prediction(self, JD_epoch, iplanet, nbins=500):
@@ -1342,7 +1361,7 @@ class OrbitPlots:
         figure = corner_modified.corner(chain, labels=labels, quantiles=[0.16, 0.5, 0.84], range=[0.999 for l in labels], hist_bin_factor=3, verbose=False, show_titles=True, title_kwargs={"fontsize": 12}, hist_kwargs={"lw":1.}, label_kwargs={"fontsize":15}, xlabcord=(0.5,-0.45), ylabcord=(-0.45,0.5),  **kwargs)
 
         print("Plotting Corner plot, your plot is generated at " + self.outputdir)
-        plt.savefig(os.path.join(self.outputdir, 'Corner_' + self.title)+'.pdf', transparent=True, pad_inches=0)
+        plt.savefig(os.path.join(self.outputdir, 'Corner_' + self.title)+'.pdf', transparent=True, pad_inches=0.01)
 
 ###################################################################################################
 ###################################################################################################
@@ -1481,6 +1500,7 @@ class OrbitPlots:
 #######
 # end of code
 
+
 def weighted_avg_and_std(values, weights):
     """
     Return the weighted average and standard deviation.
@@ -1491,3 +1511,11 @@ def weighted_avg_and_std(values, weights):
     # Fast and numerically precise:
     variance = np.average((values-average)**2, weights=weights)
     return (average, np.sqrt(variance))
+
+
+def num_digits_to_round(error_value):
+    return int(max(-1, -np.ceil(np.log10(error_value)) + 1))
+
+
+def round_to(value, sig_figs=1):
+    return np.round(value, sig_figs - 1 - int(np.floor(np.log10(abs(value)))))

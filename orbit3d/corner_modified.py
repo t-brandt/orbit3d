@@ -167,7 +167,7 @@ def corner(xs, bins=20, range=None, weights=None, color="k", hist_bin_factor=1,
                 q = [0.5 - 0.5*range[i], 0.5 + 0.5*range[i]]
                 range[i] = quantile(xs[i], q, weights=weights)
                 #print('manually setting the eccentricity corner plot range')
-                #if i == 3:
+                #if i == 5:
                 #    range[i][0] = 0
 
     if len(range) != xs.shape[0]:
