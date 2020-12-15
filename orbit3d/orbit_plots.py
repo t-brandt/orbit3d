@@ -463,7 +463,7 @@ class OrbitPlots:
     ########################### plot the RV orbits #######################
     
     def RV(self):
-        fig, axes = plt.subplots(2, 1, figsize=(6, 7), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
+        fig, axes = plt.subplots(2, 1, figsize=(4, 4.66), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
         orb_ml = Orbit(self, 'best')
         # plot the 50 randomly selected curves
         for i in range(self.num_orbits):
@@ -754,7 +754,7 @@ class OrbitPlots:
             axes[-1].set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
             axes[-1].set_ylabel(r'O-C ' + OCseparation_unit, fontsize=13)
             if len(axes) == 3:
-                ylim = -6 * np.min(self.relsep_obs_err*oc_mp), 6 * np.min(self.relsep_obs_err*oc_mp)
+                ylim = -12 * np.min(self.relsep_obs_err*oc_mp), 12 * np.min(self.relsep_obs_err*oc_mp)
                 axes[-1].set_ylim(ylim)
 
             # add the chisquared of the fit
@@ -898,7 +898,7 @@ class OrbitPlots:
             axes[-1].set_xlabel('Epoch (year)', labelpad=6, fontsize=13)
             axes[-1].set_ylabel(r'O-C $(^{\circ})$', fontsize=13)
             if len(axes) == 3:
-                ylim = -6 * np.min(self.PA_obs_err), 6 * np.min(self.PA_obs_err)
+                ylim = -12 * np.min(self.PA_obs_err), 12 * np.min(self.PA_obs_err)
                 axes[-1].set_ylim(ylim)
 
             if all_data_have_a_source:
@@ -976,7 +976,7 @@ class OrbitPlots:
             if make_oc:
                 fig, axes = plt.subplots(2, 2, figsize=(5, 8), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
             else:
-                fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharex=True)
+                fig, axes = plt.subplots(1, 2, figsize=(10, 3*10/8), sharex=True)
                 axes = axes.ravel()
                 axes = np.array([[axes[0], axes[1]]])
             # set up the observed data points
