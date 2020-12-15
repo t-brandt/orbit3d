@@ -721,20 +721,25 @@ class OrbitPlots:
             dat_OC = self.relsep_obs - orb_ml.relsep[self.ast_indx]
             if not all_data_have_a_source or len(set(self.ast_data_source)) == 1:
                 colors = [self.marker_color]
+                markers = ['o']
             else:
-                colors = list(mcolors.BASE_COLORS)[:len(set(self.ast_data_source))] # cycle through the matplotlib colors
-            for data_source, color in zip(set(self.ast_data_source), colors):
+                colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w'][:len(set(self.ast_data_source))] # cycle through the matplotlib colors
+                markers = ['o', 'v', '^', '8', 's', 'p', 'h', 'D'][:len(set(self.ast_data_source))]
+
+            data_sources = list(set(self.ast_data_source))
+            data_sources.sort()
+            for data_source, color, marker in zip(data_sources, colors, markers):
                 this_source = self.ast_data_source == data_source
                 axes[0].errorbar(ep_relAst_obs_calendar[this_source], self.relsep_obs[this_source], yerr=self.relsep_obs_err[this_source],
-                                 color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299, label=data_source)
-                axes[0].scatter(ep_relAst_obs_calendar[this_source], self.relsep_obs[this_source], s=45, facecolors='none', edgecolors='k',
-                                alpha=1, zorder=300)
+                                 color=color, fmt=marker, ecolor='black', capsize=3, markersize=5, zorder=299, label=data_source)
+                axes[0].scatter(ep_relAst_obs_calendar[this_source], self.relsep_obs[this_source], s=45, facecolors=color, edgecolors='k',
+                                alpha=1, zorder=300, marker=marker)
                 axes[1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source]*oc_mp, yerr=self.relsep_obs_err[this_source]*oc_mp, color=color,
-                                 fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-                axes[1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source]*oc_mp, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+                                 fmt=marker, ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source]*oc_mp, s=45, marker=marker, edgecolors='k', alpha=1, zorder=300, facecolors=color)
 
-                axes[-1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source]*oc_mp, yerr=self.relsep_obs_err[this_source]*oc_mp, color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-                axes[-1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source]*oc_mp, s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+                axes[-1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source]*oc_mp, yerr=self.relsep_obs_err[this_source]*oc_mp, color=color, fmt=marker, ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[-1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source]*oc_mp, s=45, edgecolors='k', alpha=1, zorder=300, marker=marker, facecolors=color)
 
             # axes settings
             # ax1
@@ -865,20 +870,31 @@ class OrbitPlots:
             dat_OC = self.PA_obs - orb_ml.PA[self.ast_indx]
             if not all_data_have_a_source or len(set(self.ast_data_source)) == 1:
                 colors = [self.marker_color]
+                markers = ['o']
             else:
-                colors = list(mcolors.BASE_COLORS)[:len(set(self.ast_data_source))] # cycle through the matplotlib colors
+                colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w'][:len(set(self.ast_data_source))] # cycle through the matplotlib colors
+                markers = ['o', 'v', '^', '8', 's', 'p', 'h', 'D'][:len(set(self.ast_data_source))]
 
-            for data_source, color in zip(set(self.ast_data_source), colors):
+            data_sources = list(set(self.ast_data_source))
+            data_sources.sort()
+            for data_source, color, marker in zip(data_sources, colors, markers):
+                print(color, marker)
                 this_source = self.ast_data_source == data_source
-                axes[0].errorbar(ep_relAst_obs_calendar[this_source], self.PA_obs[this_source], yerr=self.PA_obs_err[this_source], color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299, label=data_source)
-                axes[0].scatter(ep_relAst_obs_calendar[this_source], self.PA_obs[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+                axes[0].errorbar(ep_relAst_obs_calendar[this_source], self.PA_obs[this_source], yerr=self.PA_obs_err[this_source], color=color,
+                                 fmt=marker, ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[0].scatter(ep_relAst_obs_calendar[this_source], self.PA_obs[this_source], s=45, edgecolors='k',
+                                alpha=1, zorder=300, marker=marker, label=data_source, facecolors=color)
 
 
-                axes[1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.PA_obs_err[this_source], color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-                axes[1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+                axes[1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.PA_obs_err[this_source], color=color,
+                                 fmt=marker, ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, edgecolors='k', alpha=1, zorder=300,
+                                marker=marker, facecolors=color)
 
-                axes[-1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.PA_obs_err[this_source], color=color, fmt='o', ecolor='black', capsize=3, markersize=5, zorder=299)
-                axes[-1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, facecolors='none', edgecolors='k', alpha=1, zorder=300)
+                axes[-1].errorbar(ep_relAst_obs_calendar[this_source], dat_OC[this_source], yerr=self.PA_obs_err[this_source],
+                                  color=color, fmt=marker, ecolor='black', capsize=3, markersize=5, zorder=299)
+                axes[-1].scatter(ep_relAst_obs_calendar[this_source], dat_OC[this_source], s=45, edgecolors='k', alpha=1,
+                                 zorder=300, marker=marker, facecolors=color)
             # setting axis limits
             # ax1
             xlim = (np.min(ep_relAst_obs_calendar)-1, np.max(ep_relAst_obs_calendar)+1)
