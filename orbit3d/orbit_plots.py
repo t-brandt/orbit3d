@@ -1186,6 +1186,7 @@ class OrbitPlots:
         plt.savefig(os.path.join(self.outputdir,'astrometric_prediction_' + self.title)+'.pdf', transparent=True, pad_inches=0)
 
     def make_astrometric_prediction_table(self):
+        from astropy.table import Column
         # MAKING the table of relative astrometry predictions
         # WORKS IN ANY DATE FORMAT, JUST SPECIFY IT IN THE CONFIG WITH position_predict_table_epoch_format
         #print(self.position_predict_table_epochs, self.position_predict_table_epoch_format)
@@ -1193,37 +1194,11 @@ class OrbitPlots:
         planet_idx = np.ones_like(epochs) * self.iplanet
         #planet_idx = np.hstack([np.ones_like(epochs)*i for i in range(self.nplanets)]) # for making a table of all the planets at once
         #epochs = np.hstack([epochs, epochs]) # for making a table of all the planets at once
-        bl = np.zeros_like(epochs, dtype=float)
-        predicted_positions = Table({'epoch': epochs, 'planet': planet_idx, 'ra': bl, 'ra_err':bl, 'dec': bl, 'dec_err': bl})
-        for i, row in enumerate(predicted_positions):
-            print(f'predicting epoch {i+1} of {len(epochs)}')
-            dens, cdf_func, xmin, xmax, ymin, ymax, x, y = self.astrometric_prediction(row['epoch'].jd, row['planet'], nbins=500)
-            # convert to mas
-            xmin, xmax, ymin, ymax, x, y = 1000*xmin, 1000*xmax, 1000*ymin, 1000*ymax, 1000*x, 1000*y
-            # sum the density along each axis to get the mean and error in each direction
-            dens = dens
-            ra_dens, dec_dens = np.sum(dens, axis=1), np.sum(dens, axis=0)
-            ra, ra_err = weighted_avg_and_std(x, ra_dens)
-            dec, dec_err = weighted_avg_and_std(y, dec_dens)
-            maxl = np.where(dens == np.max(dens))
-            maxl_ra, maxl_dec = x[maxl[0]], y[maxl[1]]
-            #print(maxl_ra, maxl_dec)
-            #print(ra, ra_err, dec, dec_err)
-            predicted_positions[i]['ra'] = ra
-            predicted_positions[i]['ra_err'] = ra_err
-            predicted_positions[i]['dec'] = dec
-            predicted_positions[i]['dec_err'] = dec_err
-            #print(predicted_positions[i])
+        predicted_positions = Table(self.astrometric_prediction_accurate(epochs.jd))
+        predicted_positions.add_column(Column(epochs.value, name='epoch'), index=0)
+        predicted_positions.add_column(Column(planet_idx, name='planet'))
 
-        # save the table both as a csv
         outfile = os.path.join(self.outputdir,'astrometric_prediction_table' + self.title)
-        # convert to separation/position angle
-        predicted_positions['sep'], predicted_positions['pa'] = to_sep_pa(predicted_positions['ra'], predicted_positions['dec'])
-        predicted_positions['sep_err'], predicted_positions['pa_err'], _ = ra_dec_error_to_sep_pa_error_and_corr(predicted_positions['sep'],
-                                                                                                                 predicted_positions['pa'],
-                                                                                                                 predicted_positions['ra_err'],
-                                                                                                                 predicted_positions['dec_err'],
-                                                                                                                 np.zeros_like(predicted_positions['sep']))
         # save the output as a csv
         predicted_positions.write(outfile + '.csv', overwrite=True)
 
@@ -1237,7 +1212,7 @@ class OrbitPlots:
         predicted_positions.rename_column('pa_err', r'$\sigma_{\rm PA}$ (degrees)')
 
         # convert MJD to ISOT dates for the latex write out.
-        from astropy.table import Column
+
         ut_date = [t.split('T')[0] for t in Time(predicted_positions[self.position_predict_table_epoch_format],
                    format=self.position_predict_table_epoch_format.lower()).isot]
         predicted_positions.add_column(Column(ut_date, name='Date'), index=0)  # Insert before first table column
@@ -1260,71 +1235,36 @@ class OrbitPlots:
                            latexdict={'units': {'Time': 'Day', 'planet': '', r'$\rho': 'mas', r'$\sigma_{\rho}$': 'mas',
                                                 'PA': 'degrees', r'$\sigma_{\rm PA}$': 'degrees'}}, overwrite=True)
 
-    def astrometric_prediction_accurate(self):
-        # version of astrometric_prediction that uses orvara's orbit internals so that the 3-body approximation is actually used.
-        fig = plt.figure(figsize=(5, 5))
-        ax = fig.add_subplot(111)
-
-        # plot the num_orbits randomly selected curves
+    def astrometric_prediction_accurate(self, JDepochs):
+        # version of astrometric_prediction that uses orvara's orbit internals so
+        # that the 3-body approximation is actually used.
+        ra, dec = [], []
+        sep, pa = [], []
         for i in range(self.num_orbits):
-            orb = Orbit(self, step=self.rand_idx[i])
-            dra, ddec = self.closed_orbit(orb.par, orb.plx)
+            print(i)
+            orb = Orbit(self, step=self.rand_idx[i], epochs=JDepochs)
+            dec.append(orb.relsep * np.cos(orb.PA * np.pi / 180))
+            ra.append(orb.relsep * np.sin(orb.PA * np.pi / 180))
+            sep.append(orb.relsep)
+            pa.append(orb.PA)
 
-            ax.plot(dra, ddec, color=self.colormap(self.normalize(orb.colorpar)), alpha=0.4, linewidth=0.8)
+        """
+        ra is an array like:
+        [[ra_at_epoch0_and_orbit0, ra_at_epoch1_and_orbit0, ...],
+         [ra_at_epoch0_and_orbit1, ra_at_epoch1_and_orbit1, ...],
+         ...
+         [ra_at_epoch0_and_orbitN, ra_at_epoch1_and_orbitN, ...]]
+        """
+        # convert to array and convert to mas
+        ra, dec, sep, pa = np.array(ra)*1000, np.array(dec)*1000, np.array(sep)*1000, np.array(pa)
+        # calculating the ra, dec, pa and separation mean values and errors
+        mean_ra, mean_dec = np.mean(ra, axis=0), np.mean(dec, axis=0)
+        mean_sep, mean_pa = np.mean(sep, axis=0), np.mean(pa, axis=0)
+        ra_err, dec_err = np.std(ra, axis=0), np.std(dec, axis=0)
+        sep_err, pa_err = np.std(sep, axis=0), np.std(pa, axis=0)
 
-        # plot the most likely orbit
-
-        orb_ml = Orbit(self, step='best')
-        dra, ddec = self.closed_orbit(orb_ml.par, orb_ml.plx)
-        ax.plot(dra, ddec, color='black')
-
-        # plot the relAst data points
-
-        if self.have_reldat:
-            ra_obs = self.relsep_obs * np.sin(self.PA_obs * np.pi / 180.)
-            dec_obs = self.relsep_obs * np.cos(self.PA_obs * np.pi / 180.)
-            ax.scatter(ra_obs, dec_obs, s=45, facecolors=self.marker_color, edgecolors='none', zorder=99)
-            ax.scatter(ra_obs, dec_obs, s=45, facecolors='none', edgecolors='k', zorder=100)
-
-        # plot the predicted positions (set in config.ini)
-        epoch_int = []
-        for year in self.epoch_calendar:
-            epoch_int.append(int(year))
-
-        epochs = [self.calendar_to_JD(float(year)) for year in self.predicted_ep]
-        orb_ml = Orbit(self, 'best', epochs=epochs)
-
-
-        # define some functions to use later
-        def calc_linear(x, y):
-            x1, x2 = x[0], x[1]
-            y1, y2 = y[0], y[1]
-            m = (y1 - y2) / (x1 - x2)
-            b = y1 - m * x1
-            return m, b
-
-
-        # new method to rotate the labels according to angle of normal to the curve tangent
-
-        x0, x1 = ax.get_xlim()
-        y0, y1 = ax.get_ylim()
-        xlim = [x0 - 0.15 * (x1 - x0), x1 + 0.15 * (x1 - x0)]
-        ylim = [y0 - 0.15 * (y1 - y0), y1 + 0.15 * (y1 - y0)]
-        ax.set_xlim(xlim)
-        ax.set_ylim(ylim)
-
-        i = 0
-        for year in self.predicted_ep:
-            year = int(year)
-
-            # rotate the labels
-            # create a list containing the data for the most likely orbits for all the predicted epochs because the predicted epochs lie on the most likely orbit only
-
-            t = np.asarray(self.epoch_calendar)
-
-            y, x = [orb_ml.relsep[i] * np.cos(orb_ml.PA[i] * np.pi / 180),
-                    orb_ml.relsep[i] * np.sin(orb_ml.PA[i] * np.pi / 180)]
-
+        return {'ra': mean_ra, 'dec': mean_dec, 'sep': mean_sep, 'pa': mean_pa,
+                'ra_err': ra_err, 'dec_err': dec_err, 'sep_err': sep_err, 'pa_err': pa_err, }
 
     def astrometric_prediction(self, JD_epoch, iplanet, nbins=500):
         # Fetch parameters as ndarrays
@@ -1620,42 +1560,3 @@ def num_digits_to_round(error_value):
 
 def round_to(value, sig_figs=1):
     return np.round(value, sig_figs - 1 - int(np.floor(np.log10(abs(value)))))
-
-
-def to_ra_dec(sep, pa):
-    ra, dec = np.sin(pa * np.pi / 180) * sep, np.cos(pa * np.pi / 180) * sep
-    return ra, dec
-
-
-def error_to_ra_dec(sep, pa, sep_err, pa_err):
-    ra_err = np.abs(np.sin(pa * np.pi / 180 + np.pi / 2) * (pa_err * np.pi / 180) * sep)
-    dec_err = np.abs(np.cos(pa * np.pi / 180 + np.pi / 2) * (pa_err * np.pi / 180) * sep)
-    ra_err += np.abs(np.sin(pa * np.pi / 180) * sep_err)
-    dec_err += np.abs(np.cos(pa * np.pi / 180) * sep_err)
-    return ra_err, dec_err
-
-
-def ra_dec_error_to_sep_pa_error_and_corr(sep, pa, ra_err, dec_err, ra_dec_corr):
-    # calculates the pa and separation error, with pa and pa_error in degrees
-    # cov = np.array([[dec_err**2, ra_err*dec_err*ra_dec_corr], [ra_err*dec_err*ra_dec_corr, ra_err**2]]).reshape((2, -1, 2))
-    cov = [np.array([[dec_err[i] ** 2, ra_err[i] * dec_err[i] * ra_dec_corr[i]],
-                     [ra_err[i] * dec_err[i] * ra_dec_corr[i], ra_err[i] ** 2]]) for i in range(len(sep))]
-    print(cov)
-    sep_err, pa_err, pa_sep_corr = [], [], []
-    for i, _sep, theta in zip(range(len(sep)), sep, pa):
-        c, s = np.cos(-theta), np.sin(-theta)
-        Rot = np.array([[s, -c], [c, s]])
-        cov_inpa_sep_basis = np.matmul(np.matmul(Rot, cov[i]), Rot.T)
-        s_err, p_err = np.sqrt(cov_inpa_sep_basis[0, 0]), np.sqrt(cov_inpa_sep_basis[1, 1] / _sep ** 2)
-        sp_corr = cov_inpa_sep_basis[0, 1] / np.sqrt(cov_inpa_sep_basis[0, 0] * cov_inpa_sep_basis[1, 1])
-        sep_err.append(s_err)
-        pa_err.append(p_err)
-        pa_sep_corr.append(sp_corr)
-    return sep_err, np.array(pa_err) * 180 / np.pi, pa_sep_corr
-
-
-def to_sep_pa(ra, dec):
-    pa = np.arctan2(ra, dec) * 180 / np.pi
-    pa[pa < 0] += 360
-    sep = np.sqrt(ra ** 2 + dec ** 2)
-    return sep, pa

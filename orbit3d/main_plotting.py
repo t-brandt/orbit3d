@@ -63,7 +63,14 @@ def initialize_plot_options(config):
     OP.position_predict_table_epochs = eval(config.get('plotting', 'position_predict_table_epochs', fallback=('2020, 2021')))
     OP.position_predict_table_epoch_format = config.get('plotting', 'position_predict_table_epoch_format', fallback='decimalyear')
     # how many random orbits
-    OP.num_orbits = config.getint('plotting', 'num_orbits', fallback = 50)
+    make_astrometric_prediction_table = config.getboolean('plotting', 'Astrometric_prediction_table', fallback=False)
+    if make_astrometric_prediction_table:
+        print('forcing the number of random orbits to be 10000 because we are making an astrometric prediction table')
+        # if we are making an astrometric prediction table, we need to sample 10000 orbits because we want the errors
+        # to be better than 1/sqrt(10000) = 1%.
+        OP.num_orbits = 1000
+    else:
+        OP.num_orbits = config.getint('plotting', 'num_orbits', fallback=50)
     
     # step size
     OP.num_steps = config.getint('plotting', 'num_steps', fallback = 1000)
