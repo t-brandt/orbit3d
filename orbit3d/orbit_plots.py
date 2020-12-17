@@ -1198,55 +1198,60 @@ class OrbitPlots:
         predicted_positions.add_column(Column(epochs.value, name='epoch'), index=0)
         predicted_positions.add_column(Column(planet_idx, name='planet'))
 
-        outfile = os.path.join(self.outputdir,'astrometric_prediction_table' + self.title)
+        outfile = os.path.join(self.outputdir, 'astrometric_prediction_table' + self.title)
         # save the output as a csv
         predicted_positions.write(outfile + '.csv', overwrite=True)
 
+        # round to the correct number of sig figs
+        for i in range(len(predicted_positions)):
+            # truncate sig figs on measurements to nearest non zero
+            for err_key, val_key in zip(['ra_err', 'dec_err'], ['ra', 'dec']):
+                places_after0 = num_digits_to_round(predicted_positions[i][err_key])
+                predicted_positions[i][val_key] = np.round(predicted_positions[i][val_key], places_after0)
+                predicted_positions[i][err_key] = round_to(predicted_positions[i][err_key], max(places_after0-1, 1))
         # construct the latex version of the table suitable for a paper.
-        cols_to_save_latex = ['epoch', 'planet', 'sep', 'sep_err', 'pa', 'pa_err']
+        cols_to_save_latex = ['epoch', 'planet', 'dec', 'dec_err', 'ra', 'ra_err']
         predicted_positions = predicted_positions[cols_to_save_latex]
         predicted_positions.rename_column('epoch', self.position_predict_table_epoch_format)
-        predicted_positions.rename_column('sep', r'$\rho$ (mas)')
-        predicted_positions.rename_column('sep_err', r'$\sigma_{\rho}$ (mas)')
-        predicted_positions.rename_column('pa', 'PA (degrees)')
-        predicted_positions.rename_column('pa_err', r'$\sigma_{\rm PA}$ (degrees)')
+        predicted_positions.rename_column('dec', r'$\delta$ (mas)')
+        predicted_positions.rename_column('dec_err', r'$\sigma_{\delta}$ (mas)')
+        predicted_positions.rename_column('ra', r'$\alpha$ (mas)')
+        predicted_positions.rename_column('ra_err', r'$\sigma_{\alpha}$ (mas)')
+        #predicted_positions.rename_column('sep', r'$\rho$ (mas)')
+        #predicted_positions.rename_column('sep_err', r'$\sigma_{\rho}$ (mas)')
+        #predicted_positions.rename_column('pa', 'PA (degrees)')
+        #predicted_positions.rename_column('pa_err', r'$\sigma_{\rm PA}$ (degrees)')
 
         # convert MJD to ISOT dates for the latex write out.
-
         ut_date = [t.split('T')[0] for t in Time(predicted_positions[self.position_predict_table_epoch_format],
                    format=self.position_predict_table_epoch_format.lower()).isot]
         predicted_positions.add_column(Column(ut_date, name='Date'), index=0)  # Insert before first table column
         del predicted_positions[self.position_predict_table_epoch_format]
-        # round to the correct number of sig figs
-        for i in range(len(predicted_positions)):
-            # truncate sig figs on measurements to nearest non zero
-            places_after0 = num_digits_to_round(predicted_positions[i][r'$\sigma_{\rho}$ (mas)'])
-            predicted_positions[i][r'$\rho$ (mas)'] = np.round(predicted_positions[i][r'$\rho$ (mas)'], places_after0)
-            predicted_positions[i][r'$\sigma_{\rho}$ (mas)'] = round_to(predicted_positions[i][r'$\sigma_{\rho}$ (mas)'], max(places_after0-1, 1))
-            places_after0 = num_digits_to_round(predicted_positions[i][r'$\sigma_{\rm PA}$ (degrees)'])
-            predicted_positions[i]['PA (degrees)'] = np.round(predicted_positions[i]['PA (degrees)'], places_after0)
-            predicted_positions[i][r'$\sigma_{\rm PA}$ (degrees)'] = round_to(predicted_positions[i][r'$\sigma_{\rm PA}$ (degrees)'], max(places_after0-1, 1))
 
         # remove the planet column if it is not needed:
         if len(set(predicted_positions['planet'])) == 1:
             del predicted_positions['planet']
 
         asciiastropy.write(predicted_positions, output=outfile + '.txt', Writer=asciiastropy.Latex,
-                           latexdict={'units': {'Time': 'Day', 'planet': '', r'$\rho': 'mas', r'$\sigma_{\rho}$': 'mas',
-                                                'PA': 'degrees', r'$\sigma_{\rm PA}$': 'degrees'}}, overwrite=True)
+                           #latexdict={'units': {'Time': 'Day', 'planet': '', r'$\rho': 'mas', r'$\sigma_{\rho}$': 'mas',
+                           #                     'PA': 'degrees', r'$\sigma_{\rm PA}$': 'degrees'}},
+                           overwrite=True)
 
     def astrometric_prediction_accurate(self, JDepochs):
         # version of astrometric_prediction that uses orvara's orbit internals so
         # that the 3-body approximation is actually used.
         ra, dec = [], []
-        sep, pa = [], []
+        #sep, pa = [], []  # we dont calculate sep, pa anymore because pa is ill behaved near the star. I.e. just binning pa
+        # we end up binning negative and positive angles together and averaging to 0 which is just nonsensical.
+        print('simulating orbits for astrometric prediction')
         for i in range(self.num_orbits):
-            print(i)
+            if not (i % 50):
+                print(f'orbit {i}/{self.num_orbits}')
             orb = Orbit(self, step=self.rand_idx[i], epochs=JDepochs)
             dec.append(orb.relsep * np.cos(orb.PA * np.pi / 180))
             ra.append(orb.relsep * np.sin(orb.PA * np.pi / 180))
-            sep.append(orb.relsep)
-            pa.append(orb.PA)
+            #sep.append(orb.relsep)
+            #pa.append(orb.PA)
 
         """
         ra is an array like:
@@ -1256,18 +1261,18 @@ class OrbitPlots:
          [ra_at_epoch0_and_orbitN, ra_at_epoch1_and_orbitN, ...]]
         """
         # convert to array and convert to mas
-        ra, dec, sep, pa = np.array(ra)*1000, np.array(dec)*1000, np.array(sep)*1000, np.array(pa)
+        ra, dec = np.array(ra)*1000, np.array(dec)*1000
         # calculating the ra, dec, pa and separation mean values and errors
         mean_ra, mean_dec = np.mean(ra, axis=0), np.mean(dec, axis=0)
-        mean_sep, mean_pa = np.mean(sep, axis=0), np.mean(pa, axis=0)
         ra_err, dec_err = np.std(ra, axis=0), np.std(dec, axis=0)
-        sep_err, pa_err = np.std(sep, axis=0), np.std(pa, axis=0)
-
-        return {'ra': mean_ra, 'dec': mean_dec, 'sep': mean_sep, 'pa': mean_pa,
-                'ra_err': ra_err, 'dec_err': dec_err, 'sep_err': sep_err, 'pa_err': pa_err, }
+        mean_sep, mean_pa = to_sep_pa(mean_ra, mean_dec)
+        return {'ra': mean_ra, 'dec': mean_dec, 'ra_err': ra_err, 'dec_err': dec_err,
+                'sep': mean_sep, 'pa': mean_pa}
 
     def astrometric_prediction(self, JD_epoch, iplanet, nbins=500):
         # Fetch parameters as ndarrays
+        # Note that this function disagrees with astrometric_prediction_accurate and so should be replaced
+        # by astrometric_prediction_accurate. Something about the by-hand calculation in here has gone wrong.
         par = self.chain.astype(float)
         mpri = par[:, 1]
         msec = par[:, 2 + 7 * iplanet]
@@ -1560,3 +1565,10 @@ def num_digits_to_round(error_value):
 
 def round_to(value, sig_figs=1):
     return np.round(value, sig_figs - 1 - int(np.floor(np.log10(abs(value)))))
+
+
+def to_sep_pa(ra, dec):
+    pa = np.arctan2(ra, dec) * 180/np.pi
+    pa[pa < 0] += 360
+    sep = np.sqrt(ra**2 + dec**2)
+    return sep, pa

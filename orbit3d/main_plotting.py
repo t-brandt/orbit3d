@@ -65,9 +65,8 @@ def initialize_plot_options(config):
     # how many random orbits
     make_astrometric_prediction_table = config.getboolean('plotting', 'Astrometric_prediction_table', fallback=False)
     if make_astrometric_prediction_table:
-        print('forcing the number of random orbits to be 10000 because we are making an astrometric prediction table')
-        # if we are making an astrometric prediction table, we need to sample 10000 orbits because we want the errors
-        # to be better than 1/sqrt(10000) = 1%.
+        print('forcing the number of random orbits to be 1000 because we are making an astrometric prediction table '
+              'and want the error bars to be correct to within 3% = sqrt(1000)')
         OP.num_orbits = 1000
     else:
         OP.num_orbits = config.getint('plotting', 'num_orbits', fallback=50)
