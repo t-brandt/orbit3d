@@ -1209,14 +1209,16 @@ class OrbitPlots:
                 places_after0 = num_digits_to_round(predicted_positions[i][err_key])
                 predicted_positions[i][val_key] = np.round(predicted_positions[i][val_key], places_after0)
                 predicted_positions[i][err_key] = round_to(predicted_positions[i][err_key], max(places_after0-1, 1))
+            predicted_positions[i]['ra_dec_correlation_coefficient'] = np.round(predicted_positions[i]['ra_dec_correlation_coefficient'], 3)
         # construct the latex version of the table suitable for a paper.
-        cols_to_save_latex = ['epoch', 'planet', 'dec', 'dec_err', 'ra', 'ra_err']
+        cols_to_save_latex = ['epoch', 'planet', 'dec', 'dec_err', 'ra', 'ra_err', 'ra_dec_correlation_coefficient']
         predicted_positions = predicted_positions[cols_to_save_latex]
         predicted_positions.rename_column('epoch', self.position_predict_table_epoch_format)
         predicted_positions.rename_column('dec', r'$\delta$ (mas)')
         predicted_positions.rename_column('dec_err', r'$\sigma_{\delta}$ (mas)')
         predicted_positions.rename_column('ra', r'$\alpha$ (mas)')
         predicted_positions.rename_column('ra_err', r'$\sigma_{\alpha}$ (mas)')
+        predicted_positions.rename_column('ra_dec_correlation_coefficient', r'$\rho_{\alpha\delta}$')
         #predicted_positions.rename_column('sep', r'$\rho$ (mas)')
         #predicted_positions.rename_column('sep_err', r'$\sigma_{\rho}$ (mas)')
         #predicted_positions.rename_column('pa', 'PA (degrees)')
@@ -1265,8 +1267,10 @@ class OrbitPlots:
         # calculating the ra, dec, pa and separation mean values and errors
         mean_ra, mean_dec = np.mean(ra, axis=0), np.mean(dec, axis=0)
         ra_err, dec_err = np.std(ra, axis=0), np.std(dec, axis=0)
+        ra_dec_corr = np.mean((ra - mean_ra)*(dec - mean_dec)/(ra_err * dec_err), axis=0)
         mean_sep, mean_pa = to_sep_pa(mean_ra, mean_dec)
         return {'ra': mean_ra, 'dec': mean_dec, 'ra_err': ra_err, 'dec_err': dec_err,
+                'ra_dec_correlation_coefficient': ra_dec_corr,
                 'sep': mean_sep, 'pa': mean_pa}
 
     def astrometric_prediction(self, JD_epoch, iplanet, nbins=500):
