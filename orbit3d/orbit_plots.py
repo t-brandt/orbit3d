@@ -1195,6 +1195,7 @@ class OrbitPlots:
         #planet_idx = np.hstack([np.ones_like(epochs)*i for i in range(self.nplanets)]) # for making a table of all the planets at once
         #epochs = np.hstack([epochs, epochs]) # for making a table of all the planets at once
         predicted_positions = Table(self.astrometric_prediction_accurate(epochs.jd))
+        print(len(predicted_positions), " total predicted positions")
         predicted_positions.add_column(Column(epochs.value, name='epoch'), index=0)
         predicted_positions.add_column(Column(planet_idx, name='planet'))
 
@@ -1205,13 +1206,13 @@ class OrbitPlots:
         # round to the correct number of sig figs
         for i in range(len(predicted_positions)):
             # truncate sig figs on measurements to nearest non zero
-            for err_key, val_key in zip(['ra_err', 'dec_err'], ['ra', 'dec']):
+            for err_key, val_key in zip(['ra_err', 'dec_err', 'sep_err'], ['ra', 'dec', 'sep']):
                 places_after0 = num_digits_to_round(predicted_positions[i][err_key])
                 predicted_positions[i][val_key] = np.round(predicted_positions[i][val_key], places_after0)
                 predicted_positions[i][err_key] = round_to(predicted_positions[i][err_key], max(places_after0-1, 1))
             predicted_positions[i]['ra_dec_correlation_coefficient'] = np.round(predicted_positions[i]['ra_dec_correlation_coefficient'], 3)
         # construct the latex version of the table suitable for a paper.
-        cols_to_save_latex = ['epoch', 'planet', 'dec', 'dec_err', 'ra', 'ra_err', 'ra_dec_correlation_coefficient']
+        cols_to_save_latex = ['epoch', 'planet', 'dec', 'dec_err', 'ra', 'ra_err', 'ra_dec_correlation_coefficient', 'sep', 'sep_err']
         predicted_positions = predicted_positions[cols_to_save_latex]
         predicted_positions.rename_column('epoch', self.position_predict_table_epoch_format)
         predicted_positions.rename_column('dec', r'$\delta$ (mas)')
@@ -1219,8 +1220,7 @@ class OrbitPlots:
         predicted_positions.rename_column('ra', r'$\alpha$ (mas)')
         predicted_positions.rename_column('ra_err', r'$\sigma_{\alpha}$ (mas)')
         predicted_positions.rename_column('ra_dec_correlation_coefficient', r'$\rho_{\alpha\delta}$')
-        #predicted_positions.rename_column('sep', r'$\rho$ (mas)')
-        #predicted_positions.rename_column('sep_err', r'$\sigma_{\rho}$ (mas)')
+        predicted_positions.rename_column('sep_err', r'$\sigma_{\rm Sep}$')
         #predicted_positions.rename_column('pa', 'PA (degrees)')
         #predicted_positions.rename_column('pa_err', r'$\sigma_{\rm PA}$ (degrees)')
 
@@ -1269,9 +1269,14 @@ class OrbitPlots:
         ra_err, dec_err = np.std(ra, axis=0), np.std(dec, axis=0)
         ra_dec_corr = np.mean((ra - mean_ra)*(dec - mean_dec)/(ra_err * dec_err), axis=0)
         mean_sep, mean_pa = to_sep_pa(mean_ra, mean_dec)
+        # calculate the separation and its error
+        sep_err = ra_dec_error_to_approx_sep_error(mean_sep, mean_pa, ra_err, dec_err, ra_dec_corr)
         return {'ra': mean_ra, 'dec': mean_dec, 'ra_err': ra_err, 'dec_err': dec_err,
                 'ra_dec_correlation_coefficient': ra_dec_corr,
-                'sep': mean_sep, 'pa': mean_pa}
+                'sep': mean_sep, 'sep_err': sep_err,
+                # 'pa': mean_pa,  # we do not report pa because we cannot report a meaningful error for it when we are near the star.
+                }
+
 
     def astrometric_prediction(self, JD_epoch, iplanet, nbins=500):
         # Fetch parameters as ndarrays
@@ -1576,3 +1581,24 @@ def to_sep_pa(ra, dec):
     pa[pa < 0] += 360
     sep = np.sqrt(ra**2 + dec**2)
     return sep, pa
+
+
+def ra_dec_error_to_approx_sep_error(sep, pa, ra_err, dec_err, ra_dec_corr):
+    # calculates the pa and separation error, with pa and pa_error in degrees
+    #cov = np.array([[dec_err**2, ra_err*dec_err*ra_dec_corr], [ra_err*dec_err*ra_dec_corr, ra_err**2]]).reshape((2, -1, 2))
+    cov = [np.array([[dec_err[i]**2, ra_err[i]*dec_err[i]*ra_dec_corr[i]], [ra_err[i]*dec_err[i]*ra_dec_corr[i], ra_err[i]**2]]) for i in range(len(sep))]
+    sep_err, pa_err, pa_sep_corr = [], [], []
+    for i, _sep, theta in zip(range(len(sep)), sep, pa):
+        c, s = np.cos(-theta), np.sin(-theta)
+        Rot = np.array([[s, -c], [c, s]])
+        cov_inpa_sep_basis = np.matmul(np.matmul(Rot, cov[i]), Rot.T)
+        s_err, p_err = np.sqrt(cov_inpa_sep_basis[0,0]), np.sqrt(cov_inpa_sep_basis[1,1]/_sep**2)
+        sp_corr = cov_inpa_sep_basis[0,1]/np.sqrt(cov_inpa_sep_basis[0,0] * cov_inpa_sep_basis[1,1])
+        sep_err.append(s_err)
+        pa_err.append(p_err)
+        pa_sep_corr.append(sp_corr)
+    # pa_err only works if the errors are small and separation is large. PA has a singularity near 0,0 and the
+    # transformation is not so simple because it is a polar coordinate system.
+    # note that this separation error allows for formally negative separations.
+    return np.array(sep_err)#, np.array(pa_err)*180/np.pi, np.array(pa_sep_corr)
+
