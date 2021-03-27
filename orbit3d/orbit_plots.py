@@ -1498,7 +1498,7 @@ class OrbitPlots:
         
         def print_posterior(perc_sigmas):
         
-            chain = self.chain
+            chain = self.chain.astype(float) # convert to float64. float32 has issues with small periastron times.
             extras = self.extras
             di = 7*self.iplanet
             
@@ -1523,7 +1523,7 @@ class OrbitPlots:
             omega_data=(np.arctan2(chain[:,4+di],chain[:,5+di])%(2*np.pi))*180/np.pi
             omega = print_par_values(omega_data,perc_sigmas)
             e = print_par_values(chain[:,4+di]**2 + chain[:,5+di]**2,perc_sigmas)
-            sma = print_par_values(1e3/206264.80624538*chain[:,3+di],perc_sigmas)
+            sma = print_par_values(chain[:,3+di],perc_sigmas)
             t0_data = 2455197.5 - 365.25*period_data*((chain[:,8+di]*180/np.pi)%(180) - omega_data)/360. #reference epoch 2455197.5
             t0 = print_par_values(t0_data,perc_sigmas)
             q = print_par_values(chain[:,2+di]/chain[:,1+di],perc_sigmas)
