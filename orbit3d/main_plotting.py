@@ -84,6 +84,9 @@ def initialize_plot_options(config):
     
     # step size
     OP.num_steps = config.getint('plotting', 'num_steps', fallback = 1000)
+    print(f'num_steps is {OP.num_steps}. Note that a small number of steps may cause incorrect RV curves if you'
+          f' are plotting the RV of a short period planet over a long baseline (the periastron passages may'
+          f' be undersampled). If you set num_steps to a high value already, then ignore this!')
     
     # plot axes settings
     OP.set_limit = config.getboolean('plotting', 'set_limit', fallback=True)
