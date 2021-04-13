@@ -1365,7 +1365,7 @@ class OrbitPlots:
             Semimajor = chain[:, 3+di].flatten().reshape(ndim,1)                       # in AU
             Ecc = (chain[:, 4+di]**2 + chain[:, 5+di]**2).flatten().reshape(ndim,1)
 
-            little_omega = (np.arccos(chain[:, 5 + di] / np.sqrt(chain[:, 4+di]**2 + chain[:, 5+di]**2)) * 180 / np.pi).flatten() % 360
+            little_omega = (np.arctan2(chain[:,4 + di], chain[:,5 + di]) % (2 * np.pi)) * 180/np.pi
             Inc = (chain[:, 6 + di]*180/np.pi).flatten() % 360
             Omega = (chain[:, 7 + di]*180/np.pi).flatten() % 360
             lamref = (chain[:, 8 + di]*180/np.pi).flatten() % 360
@@ -1403,7 +1403,7 @@ class OrbitPlots:
             chain = np.hstack([Mpri, mass_b, mass_c, Semimajor_b, Semimajor_c, e_b, e_c])
 
         # in corner_modified, the error is modified to keep 2 significant figures
-        figure = corner_modified.corner(chain, labels=labels, quantiles=[0.16, 0.5, 0.84], range=[0.999 for l in labels],
+        figure = corner_modified.corner(chain, labels=labels, quantiles=[0.159, 0.5, 0.841], range=[0.999 for l in labels],
                                         hist_bin_factor=3, verbose=False, show_titles=True, title_kwargs={"fontsize": 12},
                                         hist_kwargs={"lw":1.}, label_kwargs={"fontsize":15}, xlabcord=(0.5,-0.45),
                                         ylabcord=(-0.45,0.5),  **kwargs)
