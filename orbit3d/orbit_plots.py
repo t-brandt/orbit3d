@@ -561,6 +561,7 @@ class OrbitPlots:
         # setting y limits
         typical_rv_error = np.median(all_rv_errors)
         axes[0].set_ylim((np.min(all_rvs) - typical_rv_error, np.max(all_rvs) + typical_rv_error))
+        axes[1].set_ylim((-2.5*np.sqrt(jit_ml**2 + typical_rv_error**2), 2.5*np.sqrt(jit_ml**2 + typical_rv_error**2)))
         #x0, x1 = axes[0].get_xlim()
         #y0, y1 = axes[0].get_ylim()
         #axes[0].set_aspect((x1-x0)/(y1-y0))
